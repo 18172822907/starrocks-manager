@@ -18,6 +18,10 @@ import {
   Code2,
   Settings,
   Box,
+  Radio,
+  HardDrive,
+  GitBranch,
+  ListChecks,
 } from 'lucide-react';
 
 const navItems = [
@@ -28,6 +32,11 @@ const navItems = [
   { href: '/catalogs', icon: FolderTree, label: 'Catalog 管理' },
   { href: '/materialized-views', icon: Box, label: '物化视图' },
   { href: '/query', icon: Terminal, label: 'SQL 查询' },
+  { label: '导入管理', section: true },
+  { href: '/routine-load', icon: Radio, label: 'Routine Load' },
+  { href: '/broker-load', icon: HardDrive, label: 'Broker Load' },
+  { href: '/pipes', icon: GitBranch, label: 'Pipes' },
+  { href: '/tasks', icon: ListChecks, label: '任务管理' },
   { label: '权限管理', section: true },
   { href: '/users', icon: Users, label: '用户管理' },
   { href: '/roles', icon: ShieldCheck, label: '角色管理' },
