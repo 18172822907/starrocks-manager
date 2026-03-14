@@ -61,6 +61,69 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { sessionId, name, action: editAction } = body;
+    if (!sessionId || !name) {
+      return NextResponse.json({ error: 'Session ID and name required' }, { status: 400 });
+    }
+
+    if (editAction === 'alter') {
+      // ALTER RESOURCE GROUP rg SET (prop1=val1, prop2=val2, ...)
+      const { cpuWeight, exclusiveCpuCores, memLimit, concurrencyLimit,
+              bigQueryCpuSecondLimit, bigQueryScanRowsLimit, bigQueryMemLimit,
+              spillMemLimitThreshold } = body;
+      const props: string[] = [];
+      if (cpuWeight !== undefined && cpuWeight !== '')           props.push(`cpu_weight=${cpuWeight}`);
+      if (exclusiveCpuCores !== undefined && exclusiveCpuCores !== '') props.push(`exclusive_cpu_cores=${exclusiveCpuCores}`);
+      if (memLimit !== undefined && memLimit !== '')             props.push(`mem_limit="${memLimit}"`);
+      if (concurrencyLimit !== undefined && concurrencyLimit !== '') props.push(`concurrency_limit=${concurrencyLimit}`);
+      if (bigQueryCpuSecondLimit !== undefined && bigQueryCpuSecondLimit !== '') props.push(`big_query_cpu_second_limit=${bigQueryCpuSecondLimit}`);
+      if (bigQueryScanRowsLimit !== undefined && bigQueryScanRowsLimit !== '') props.push(`big_query_scan_rows_limit=${bigQueryScanRowsLimit}`);
+      if (bigQueryMemLimit !== undefined && bigQueryMemLimit !== '') props.push(`big_query_mem_limit=${bigQueryMemLimit}`);
+      if (spillMemLimitThreshold !== undefined && spillMemLimitThreshold !== '') props.push(`spill_mem_limit_threshold=${spillMemLimitThreshold}`);
+
+      if (props.length === 0) {
+        return NextResponse.json({ error: 'No properties to update' }, { status: 400 });
+      }
+
+      const sql = `ALTER RESOURCE GROUP ${name} WITH (${props.join(', ')})`;
+      await executeQuery(sessionId, sql);
+      return NextResponse.json({ success: true, sql });
+    }
+
+    if (editAction === 'add_classifier') {
+      // ALTER RESOURCE GROUP rg ADD (user='x', role='y', ...)
+      const { classifierProps } = body;
+      if (!classifierProps) {
+        return NextResponse.json({ error: 'Classifier properties required' }, { status: 400 });
+      }
+      const sql = `ALTER RESOURCE GROUP ${name} ADD (${classifierProps})`;
+      await executeQuery(sessionId, sql);
+      return NextResponse.json({ success: true, sql });
+    }
+
+    if (editAction === 'drop_classifier') {
+      // ALTER RESOURCE GROUP rg DROP (CLASSIFIER_ID = N)
+      const { classifierId } = body;
+      if (!classifierId) {
+        return NextResponse.json({ error: 'Classifier ID required' }, { status: 400 });
+      }
+      const sql = `ALTER RESOURCE GROUP ${name} DROP (CLASSIFIER_ID = ${classifierId})`;
+      await executeQuery(sessionId, sql);
+      return NextResponse.json({ success: true, sql });
+    }
+
+    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { sessionId, action, name, cpuWeight, exclusiveCpuCores, memLimit, concurrencyLimit,

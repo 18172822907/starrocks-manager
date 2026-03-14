@@ -91,6 +91,13 @@ export function getLocalDb(): Database.Database {
       data          TEXT NOT NULL,
       cached_at     DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Materialized views cache
+    CREATE TABLE IF NOT EXISTS materialized_views_cache (
+      connection_id TEXT PRIMARY KEY,
+      data          TEXT NOT NULL,
+      cached_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   return db;
@@ -234,7 +241,7 @@ interface BlobCacheRow {
   cached_at: string;
 }
 
-type CacheTable = 'users_cache' | 'roles_cache' | 'resource_groups_cache' | 'catalogs_cache' | 'functions_cache' | 'variables_cache';
+type CacheTable = 'users_cache' | 'roles_cache' | 'resource_groups_cache' | 'catalogs_cache' | 'functions_cache' | 'variables_cache' | 'materialized_views_cache';
 
 export function getBlobCache(table: CacheTable, connectionId: string): { data: unknown; cachedAt: string } | null {
   const db = getLocalDb();

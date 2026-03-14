@@ -17,6 +17,7 @@ import {
   FolderTree,
   Code2,
   Settings,
+  Box,
 } from 'lucide-react';
 
 const navItems = [
@@ -25,6 +26,7 @@ const navItems = [
   { label: '数据管理', section: true },
   { href: '/databases', icon: Database, label: '数据库浏览' },
   { href: '/catalogs', icon: FolderTree, label: 'Catalog 管理' },
+  { href: '/materialized-views', icon: Box, label: '物化视图' },
   { href: '/query', icon: Terminal, label: 'SQL 查询' },
   { label: '权限管理', section: true },
   { href: '/users', icon: Users, label: '用户管理' },

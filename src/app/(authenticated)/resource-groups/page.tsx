@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
 import {
-  Layers, Plus, Trash2, RefreshCw, Search, X, Clock,
+  Layers, Plus, Trash2, RefreshCw, Search, X, Clock, Edit3, PlusCircle,
   Cpu, MemoryStick, ChevronUp, ChevronDown, ChevronsUpDown, Activity, Hash, Zap, Database
 } from 'lucide-react';
 
@@ -129,6 +129,11 @@ export default function ResourceGroupsPage() {
   const [expandedClassifiers, setExpandedClassifiers] = useState<Set<string>>(new Set());
   const [fromCache, setFromCache] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [editGroup, setEditGroup] = useState<ResourceGroup | null>(null);
+  const [editForm, setEditForm] = useState(DEFAULT_FORM);
+  const [saving, setSaving] = useState(false);
+  const [addClassifier, setAddClassifier] = useState<string | null>(null);
+  const [classifierInput, setClassifierInput] = useState('');
 
   const fetchGroups = useCallback(async (forceRefresh = false) => {
     if (!session) return;
@@ -183,6 +188,71 @@ export default function ResourceGroupsPage() {
       const data = await res.json();
       if (data.error) setError(data.error);
       else { setSuccess('资源组已删除'); fetchGroups(); }
+    } catch (err) { setError(String(err)); }
+  }
+
+  function openEdit(g: ResourceGroup) {
+    setEditGroup(g);
+    setEditForm({
+      name: g.name,
+      cpuWeight: String(g.cpu_weight ?? ''),
+      exclusiveCpuCores: String(g.exclusive_cpu_cores ?? ''),
+      memLimit: g.mem_limit && g.mem_limit !== 'null' ? g.mem_limit : '',
+      concurrencyLimit: String(g.concurrency_limit ?? ''),
+      bigQueryCpuSecondLimit: String(g.big_query_cpu_second_limit ?? ''),
+      bigQueryScanRowsLimit: String(g.big_query_scan_rows_limit ?? ''),
+      bigQueryMemLimit: String(g.big_query_mem_limit ?? ''),
+    });
+  }
+
+  async function handleEdit() {
+    if (!session || !editGroup) return;
+    setSaving(true); setError('');
+    try {
+      const res = await fetch('/api/resource-groups', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: session.sessionId, name: editGroup.name, action: 'alter',
+          cpuWeight: editForm.cpuWeight, exclusiveCpuCores: editForm.exclusiveCpuCores,
+          memLimit: editForm.memLimit, concurrencyLimit: editForm.concurrencyLimit,
+          bigQueryCpuSecondLimit: editForm.bigQueryCpuSecondLimit,
+          bigQueryScanRowsLimit: editForm.bigQueryScanRowsLimit,
+          bigQueryMemLimit: editForm.bigQueryMemLimit,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) setError(data.error);
+      else { setEditGroup(null); setSuccess('资源组配置已更新'); fetchGroups(true); }
+    } catch (err) { setError(String(err)); }
+    finally { setSaving(false); }
+  }
+
+  async function handleDropClassifier(groupName: string, classifierId: string) {
+    if (!session || !confirm(`确定要删除分类器 #${classifierId} 吗？`)) return;
+    try {
+      const res = await fetch('/api/resource-groups', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.sessionId, name: groupName, action: 'drop_classifier', classifierId }),
+      });
+      const data = await res.json();
+      if (data.error) setError(data.error);
+      else { setSuccess(`分类器 #${classifierId} 已删除`); fetchGroups(true); }
+    } catch (err) { setError(String(err)); }
+  }
+
+  async function handleAddClassifier() {
+    if (!session || !addClassifier || !classifierInput) return;
+    try {
+      const res = await fetch('/api/resource-groups', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.sessionId, name: addClassifier, action: 'add_classifier', classifierProps: classifierInput }),
+      });
+      const data = await res.json();
+      if (data.error) setError(data.error);
+      else { setAddClassifier(null); setClassifierInput(''); setSuccess('分类器已添加'); fetchGroups(true); }
     } catch (err) { setError(String(err)); }
   }
 
@@ -400,46 +470,78 @@ export default function ResourceGroupsPage() {
 
                       {/* Classifiers */}
                       <td>
-                        {classifiers.length === 0 ? (
-                          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>无</span>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {(isExpanded ? classifiers : classifiers.slice(0, 1)).map((c, i) => (
-                              <div key={i} style={{
-                                fontSize: '0.73rem', padding: '3px 8px', borderRadius: 'var(--radius-sm)',
-                                backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)',
-                                color: 'var(--text-secondary)', fontFamily: 'var(--font-mono, monospace)',
-                              }}>
-                                <span style={{ color: 'var(--text-tertiary)' }}>#{c.id}</span>
-                                <span style={{ marginLeft: '4px', color: 'var(--primary-600)', fontWeight: 600 }}>w={c.weight}</span>
-                                {c.extras && <span style={{ marginLeft: '4px', color: 'var(--text-secondary)' }}>{c.extras}</span>}
-                              </div>
-                            ))}
-                            {classifiers.length > 1 && (
-                              <button
-                                onClick={() => toggleClassifiers(g.name)}
-                                style={{
-                                  fontSize: '0.72rem', color: 'var(--primary-600)', background: 'none',
-                                  border: 'none', cursor: 'pointer', textAlign: 'left', padding: '0',
-                                }}
-                              >
-                                {isExpanded ? '▲ 收起' : `▼ 展开全部 ${classifiers.length} 条`}
-                              </button>
-                            )}
-                          </div>
-                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {classifiers.length === 0 ? (
+                            <span style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>无</span>
+                          ) : (
+                            <>
+                              {(isExpanded ? classifiers : classifiers.slice(0, 1)).map((c, i) => (
+                                <div key={i} style={{
+                                  fontSize: '0.73rem', padding: '3px 8px', borderRadius: 'var(--radius-sm)',
+                                  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)',
+                                  color: 'var(--text-secondary)', fontFamily: 'var(--font-mono, monospace)',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px',
+                                }}>
+                                  <span>
+                                    <span style={{ color: 'var(--text-tertiary)' }}>#{c.id}</span>
+                                    <span style={{ marginLeft: '4px', color: 'var(--primary-600)', fontWeight: 600 }}>w={c.weight}</span>
+                                    {c.extras && <span style={{ marginLeft: '4px', color: 'var(--text-secondary)' }}>{c.extras}</span>}
+                                  </span>
+                                  <button
+                                    onClick={() => handleDropClassifier(g.name, c.id)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger-400)', padding: '0 2px', lineHeight: 1 }}
+                                    title={`删除分类器 #${c.id}`}
+                                  >
+                                    <X size={11} />
+                                  </button>
+                                </div>
+                              ))}
+                              {classifiers.length > 1 && (
+                                <button
+                                  onClick={() => toggleClassifiers(g.name)}
+                                  style={{
+                                    fontSize: '0.72rem', color: 'var(--primary-600)', background: 'none',
+                                    border: 'none', cursor: 'pointer', textAlign: 'left', padding: '0',
+                                  }}
+                                >
+                                  {isExpanded ? '▲ 收起' : `▼ 展开全部 ${classifiers.length} 条`}
+                                </button>
+                              )}
+                            </>
+                          )}
+                          <button
+                            onClick={() => setAddClassifier(g.name)}
+                            style={{
+                              fontSize: '0.68rem', color: 'var(--primary-600)', background: 'none',
+                              border: '1px dashed var(--border-secondary)', borderRadius: 'var(--radius-sm)',
+                              cursor: 'pointer', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: '3px',
+                            }}
+                          >
+                            <PlusCircle size={10} /> 添加分类器
+                          </button>
+                        </div>
                       </td>
 
                       {/* Sticky: 操作 */}
-                      <td style={stickyRightBody}>
-                        <button
-                          className="btn btn-ghost btn-icon"
-                          style={{ color: 'var(--danger-500)' }}
-                          onClick={() => handleDelete(g.name)}
-                          title="删除资源组"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                      <td style={{...stickyRightBody, width: '90px'}}>
+                        <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ color: 'var(--primary-600)' }}
+                            onClick={() => openEdit(g)}
+                            title="编辑资源组"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ color: 'var(--danger-500)' }}
+                            onClick={() => handleDelete(g.name)}
+                            title="删除资源组"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -534,6 +636,118 @@ export default function ResourceGroupsPage() {
                 <button className="btn btn-primary" onClick={handleCreate} disabled={creating || !form.name}>
                   {creating ? <span className="spinner" /> : <Plus size={16} />}
                   创建
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Edit Modal */}
+        {editGroup && (
+          <div className="modal-overlay" onClick={() => setEditGroup(null)}>
+            <div className="modal" style={{ maxWidth: '560px' }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <div className="modal-title">编辑资源组 — {editGroup.name}</div>
+                <button className="btn-ghost btn-icon" onClick={() => setEditGroup(null)}><X size={18} /></button>
+              </div>
+              <div className="modal-body">
+                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
+                  CPU 配置
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">CPU 权重 (cpu_weight)</label>
+                    <input className="input" type="number" placeholder="例如：16" value={editForm.cpuWeight} onChange={e => setEditForm({ ...editForm, cpuWeight: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">独占核数 (exclusive_cpu_cores)</label>
+                    <input className="input" type="number" placeholder="例如：4" value={editForm.exclusiveCpuCores} onChange={e => setEditForm({ ...editForm, exclusiveCpuCores: e.target.value })} />
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
+                  内存 &amp; 并发配置
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">内存限制 (mem_limit)</label>
+                    <input className="input" placeholder="例如：20%" value={editForm.memLimit} onChange={e => setEditForm({ ...editForm, memLimit: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">并发限制 (concurrency_limit)</label>
+                    <input className="input" type="number" placeholder="例如：10" value={editForm.concurrencyLimit} onChange={e => setEditForm({ ...editForm, concurrencyLimit: e.target.value })} />
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
+                  大查询限制
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">CPU 时间限制 (秒)</label>
+                    <input className="input" type="number" placeholder="例如：100" value={editForm.bigQueryCpuSecondLimit} onChange={e => setEditForm({ ...editForm, bigQueryCpuSecondLimit: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">扫描行数限制</label>
+                    <input className="input" type="number" placeholder="例如：1000000" value={editForm.bigQueryScanRowsLimit} onChange={e => setEditForm({ ...editForm, bigQueryScanRowsLimit: e.target.value })} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">大查询内存限制 (bytes)</label>
+                  <input className="input" placeholder="例如：1073741824" value={editForm.bigQueryMemLimit} onChange={e => setEditForm({ ...editForm, bigQueryMemLimit: e.target.value })} />
+                </div>
+
+                <div style={{ padding: '10px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace", marginTop: '8px' }}>
+                  预览: ALTER RESOURCE GROUP {editGroup.name} WITH ({[
+                    editForm.cpuWeight && `cpu_weight=${editForm.cpuWeight}`,
+                    editForm.exclusiveCpuCores && `exclusive_cpu_cores=${editForm.exclusiveCpuCores}`,
+                    editForm.memLimit && `mem_limit="${editForm.memLimit}"`,
+                    editForm.concurrencyLimit && `concurrency_limit=${editForm.concurrencyLimit}`,
+                    editForm.bigQueryCpuSecondLimit && `big_query_cpu_second_limit=${editForm.bigQueryCpuSecondLimit}`,
+                    editForm.bigQueryScanRowsLimit && `big_query_scan_rows_limit=${editForm.bigQueryScanRowsLimit}`,
+                    editForm.bigQueryMemLimit && `big_query_mem_limit=${editForm.bigQueryMemLimit}`,
+                  ].filter(Boolean).join(', ')})
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setEditGroup(null)}>取消</button>
+                <button className="btn btn-primary" onClick={handleEdit} disabled={saving}>
+                  {saving ? <span className="spinner" /> : <Edit3 size={16} />}
+                  保存修改
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Classifier Modal */}
+        {addClassifier && (
+          <div className="modal-overlay" onClick={() => setAddClassifier(null)}>
+            <div className="modal" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <div className="modal-title">添加分类器 — {addClassifier}</div>
+                <button className="btn-ghost btn-icon" onClick={() => setAddClassifier(null)}><X size={18} /></button>
+              </div>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">分类器属性</label>
+                  <input
+                    className="input"
+                    placeholder="user='analyst', source_ip='10.0.0.1'"
+                    value={classifierInput}
+                    onChange={e => setClassifierInput(e.target.value)}
+                  />
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                    支持属性：user, role, query_type, source_ip, db, plan_cpu_cost_range, plan_mem_cost_range
+                  </div>
+                </div>
+                <div style={{ padding: '10px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace" }}>
+                  预览: ALTER RESOURCE GROUP {addClassifier} ADD ({classifierInput || '...'})
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setAddClassifier(null)}>取消</button>
+                <button className="btn btn-primary" onClick={handleAddClassifier} disabled={!classifierInput}>
+                  <PlusCircle size={16} /> 添加
                 </button>
               </div>
             </div>
