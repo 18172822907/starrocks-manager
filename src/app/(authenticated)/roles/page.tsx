@@ -7,7 +7,7 @@ import { Pagination } from '@/components/ui';
 import {
   ShieldCheck, Plus, Trash2, RefreshCw, Search, X,
   UserPlus, UserMinus, ChevronUp, ChevronDown, ChevronsUpDown, Clock,
-  Shield, Key, ChevronRight,
+  Shield, Key, Eye,
 } from 'lucide-react';
 
 type SortDir = 'asc' | 'desc';
@@ -38,7 +38,8 @@ export default function RolesPage() {
   const [refreshing, setRefreshing] = useState(false);
   // Grants per role
   const [roleGrants, setRoleGrants] = useState<Record<string, string[]>>({});
-  const [expandedGrants, setExpandedGrants] = useState<Set<string>>(new Set());
+  // Privilege detail modal
+  const [showPrivDetail, setShowPrivDetail] = useState<{ role: string; grants: string[] } | null>(null);
   // Grant privilege modal
   const [showPrivGrant, setShowPrivGrant] = useState<string | null>(null);
   const [privAction, setPrivAction] = useState<'grant_privilege' | 'revoke_privilege'>('grant_privilege');
@@ -154,21 +155,7 @@ export default function RolesPage() {
 
   const pg = usePagination(filtered);
 
-  function toggleGrants(role: string) {
-    setExpandedGrants(prev => {
-      const next = new Set(prev);
-      if (next.has(role)) next.delete(role); else next.add(role);
-      return next;
-    });
-  }
 
-  function parseGrantLabel(g: string) {
-    const roleMatch = g.match(/GRANT\s+['`]?([^'`\s,]+)['`]?\s+TO/i);
-    const privMatch = g.match(/GRANT\s+([A-Z_,\s]+?)\s+ON/i);
-    if (roleMatch) return { type: 'role', label: roleMatch[1] };
-    if (privMatch) return { type: 'priv', label: privMatch[1].trim().split(',')[0].trim() + (privMatch[1].includes(',') ? '...' : '') };
-    return { type: 'other', label: g.slice(0, 40) };
-  }
 
   async function handlePrivGrant() {
     if (!session || !showPrivGrant || !privObjName) return;
@@ -257,7 +244,7 @@ export default function RolesPage() {
                     </span>
                   </th>
                   <th>类型</th>
-                  <th>权限授权</th>
+                  <th>权限项</th>
                   <th style={{ textAlign: 'center', width: '100px' }}>操作</th>
                 </tr>
               </thead>
@@ -293,46 +280,25 @@ export default function RolesPage() {
                           {isSystem ? '● 系统角色' : '● 自定义角色'}
                         </span>
                       </td>
-                      {/* Grants column */}
+                      {/* Privileges column */}
                       <td>
                         {(() => {
                           const grants = roleGrants[name] || [];
-                          if (grants.length === 0) return <span style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>无权限</span>;
-                          const parsed = grants.map(parseGrantLabel);
-                          const isExpanded = expandedGrants.has(name);
+                          if (grants.length === 0) return <span style={{ color: 'var(--text-tertiary)', fontSize: '0.76rem' }}>—</span>;
                           return (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                {(isExpanded ? parsed : parsed.slice(0, 3)).map((g, i) => (
-                                  <span key={i} style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                    padding: '2px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 500,
-                                    backgroundColor: g.type === 'role' ? 'rgba(22,163,74,0.08)' : 'rgba(37,99,235,0.08)',
-                                    color: g.type === 'role' ? 'var(--success-600)' : 'var(--primary-600)',
-                                    border: `1px solid ${g.type === 'role' ? 'rgba(22,163,74,0.2)' : 'rgba(37,99,235,0.2)'}`,
-                                    maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                  }}>
-                                    {g.type === 'role' ? <ShieldCheck size={10} /> : <Key size={10} />}
-                                    {g.label}
-                                  </span>
-                                ))}
-                                {!isExpanded && parsed.length > 3 && (
-                                  <button onClick={() => toggleGrants(name)} style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: '3px',
-                                    padding: '2px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 500,
-                                    backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)',
-                                    border: '1px solid var(--border-secondary)', cursor: 'pointer',
-                                  }}>
-                                    <ChevronRight size={10} /> +{parsed.length - 3}
-                                  </button>
-                                )}
-                              </div>
-                              {isExpanded && (
-                                <button onClick={() => toggleGrants(name)} style={{ fontSize: '0.72rem', color: 'var(--primary-600)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: '0' }}>
-                                  ▲ 收起
-                                </button>
-                              )}
-                            </div>
+                            <button
+                              onClick={() => setShowPrivDetail({ role: name, grants })}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                padding: '2px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 500,
+                                backgroundColor: 'rgba(37,99,235,0.06)', color: 'var(--primary-600)',
+                                borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(37,99,235,0.15)',
+                                cursor: 'pointer', transition: 'all 0.15s',
+                              }}
+                            >
+                              <Key size={10} />{grants.length} 项权限
+                              <Eye size={10} style={{ marginLeft: '2px', opacity: 0.6 }} />
+                            </button>
                           );
                         })()}
                       </td>
@@ -501,6 +467,70 @@ export default function RolesPage() {
                 <button className="btn btn-primary" onClick={handlePrivGrant} disabled={!privObjName && !privObjType.startsWith('ALL')}>
                   <Shield size={16} /> {privAction === 'grant_privilege' ? '授权' : '撤销'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Privilege Detail Modal */}
+        {showPrivDetail && (
+          <div className="modal-overlay" onClick={() => setShowPrivDetail(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '680px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+              <div className="modal-header">
+                <div>
+                  <div className="modal-title">权限详情</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    角色 {showPrivDetail.role} · {showPrivDetail.grants.length} 项权限
+                  </div>
+                </div>
+                <button className="btn-ghost btn-icon" onClick={() => setShowPrivDetail(null)}><X size={18} /></button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', padding: '4px 0' }}>
+                {showPrivDetail.grants.map((g, i) => {
+                  const privMatch = g.match(/GRANT\s+(.+?)\s+ON\s+(.+?)\s+TO\s+/i);
+                  const privilege = privMatch ? privMatch[1] : g;
+                  const target = privMatch ? privMatch[2] : '';
+                  return (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'flex-start', gap: '10px',
+                      padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+                      backgroundColor: i % 2 === 0 ? 'var(--bg-secondary)' : 'transparent',
+                    }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: '22px', height: '22px', borderRadius: '999px', flexShrink: 0,
+                        backgroundColor: 'rgba(37,99,235,0.08)', color: 'var(--primary-600)',
+                        fontSize: '0.68rem', fontWeight: 700,
+                      }}>
+                        {i + 1}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {privMatch ? (
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{
+                              padding: '1px 7px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600,
+                              backgroundColor: 'rgba(37,99,235,0.08)', color: 'var(--primary-600)',
+                              borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(37,99,235,0.15)',
+                            }}>
+                              {privilege}
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>ON</span>
+                            <code style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace" }}>
+                              {target}
+                            </code>
+                          </div>
+                        ) : (
+                          <code style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace", wordBreak: 'break-all' }}>
+                            {g}
+                          </code>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowPrivDetail(null)}>关闭</button>
               </div>
             </div>
           </div>
