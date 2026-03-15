@@ -162,9 +162,8 @@ export default function PrivilegeDetailModal({ title, grants, onClose }: Privile
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className="modal"
+        className="modal modal-lg"
         onClick={e => e.stopPropagation()}
-        style={{ maxWidth: '720px', maxHeight: '82vh', display: 'flex', flexDirection: 'column' }}
       >
         {/* Header */}
         <div className="modal-header">
@@ -178,10 +177,7 @@ export default function PrivilegeDetailModal({ title, grants, onClose }: Privile
         </div>
 
         {/* Summary bar */}
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px 20px',
-          borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: 'var(--border-secondary)',
-        }}>
+        <div className="modal-lg-summary">
           {catalogGroups.map(cg => (
             cg.categories.map((cat, ci) => (
               <span key={`${cg.catalogName}-${ci}`} style={{
@@ -196,8 +192,8 @@ export default function PrivilegeDetailModal({ title, grants, onClose }: Privile
           ))}
         </div>
 
-        {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {/* Body – scrollable */}
+        <div className="modal-lg-body">
           {catalogGroups.map((cg, i) => (
             <CatalogSection key={i} group={cg} />
           ))}
