@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSession } from '@/hooks/useSession';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/ui';
 import { Shield, RefreshCw, Search, Plus, X } from 'lucide-react';
 
 export default function PrivilegesPage() {
@@ -70,6 +72,8 @@ export default function PrivilegesPage() {
     return { identity, grants: grantStr };
   }).filter(g => g.identity.toLowerCase().includes(search.toLowerCase()) || g.grants.toLowerCase().includes(search.toLowerCase()));
 
+  const pg = usePagination(grantEntries);
+
   return (
     <>
       <div className="page-header">
@@ -108,7 +112,7 @@ export default function PrivilegesPage() {
                 </tr>
               </thead>
               <tbody>
-                {grantEntries.map((g, i) => (
+                {pg.paginatedData.map((g, i) => (
                   <tr key={i}>
                     <td>
                       <div className="flex items-center gap-2">
@@ -123,6 +127,14 @@ export default function PrivilegesPage() {
                 ))}
               </tbody>
             </table>
+            <div style={{
+              padding: '10px 16px', borderTop: '1px solid var(--border-secondary)',
+              fontSize: '0.78rem', color: 'var(--text-tertiary)',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
+            }}>
+              <span>共 <strong style={{ color: 'var(--text-secondary)' }}>{grantEntries.length}</strong> 条权限</span>
+              <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
+            </div>
           </div>
         )}
 

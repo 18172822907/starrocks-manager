@@ -49,7 +49,16 @@ export function DataTable({ loading, empty, emptyIcon, emptyText, footerLeft, fo
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
-function Pagination({ page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange }: NonNullable<DataTableProps['pagination']>) {
+export interface PaginationProps {
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  totalItems: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
+}
+
+export function Pagination({ page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange }: PaginationProps) {
   // Generate page numbers to show
   const pages: (number | '...')[] = [];
   if (totalPages <= 7) {
@@ -64,7 +73,7 @@ function Pagination({ page, pageSize, totalPages, totalItems, onPageChange, onPa
 
   const btnBase: React.CSSProperties = {
     padding: '4px 8px', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-sm)',
-    fontSize: '0.76rem', cursor: 'pointer', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
+    fontSize: '0.76rem', cursor: 'pointer', backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '28px', height: '28px',
     transition: 'all 0.15s ease',
   };

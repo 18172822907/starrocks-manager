@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/ui';
 import {
   Users, Plus, Trash2, RefreshCw, Search, X,
   ChevronUp, ChevronDown, ChevronsUpDown, Clock, Key, ShieldCheck, ChevronRight,
@@ -188,6 +190,11 @@ export default function UsersPage() {
       : b.identity.localeCompare(a.identity)
     );
 
+  const pg = usePagination(filtered);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { pg.resetPage(); }, [search, sortDir]);
+
   const systemCount = filtered.filter(u => SYSTEM_USERS.has(parseIdentity(u.identity).user)).length;
   const customCount = filtered.length - systemCount;
 
@@ -261,7 +268,8 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((u, idx) => {
+                {pg.paginatedData.map((u, idx) => {
+                  const globalIdx = (pg.page - 1) * pg.pageSize + idx;
                   const { user, host } = parseIdentity(u.identity);
                   const isSystem = SYSTEM_USERS.has(user);
                   const isExpanded = expandedGrants.has(u.identity);
@@ -279,7 +287,7 @@ export default function UsersPage() {
 
                   return (
                     <tr key={u.identity}>
-                      <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>{idx + 1}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>{globalIdx + 1}</td>
 
                       {/* Username */}
                       <td>
@@ -405,16 +413,15 @@ export default function UsersPage() {
             <div style={{
               padding: '10px 16px', borderTop: '1px solid var(--border-secondary)',
               fontSize: '0.78rem', color: 'var(--text-tertiary)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
             }}>
               <span>
                 共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个用户
                 {search && ` (过滤自 ${users.length} 个)`}
+                <span style={{ marginLeft: '12px', color: 'var(--accent-600)' }}>系统 {systemCount}</span>
+                <span style={{ marginLeft: '8px', color: 'var(--primary-600)' }}>普通 {customCount}</span>
               </span>
-              <span style={{ display: 'inline-flex', gap: '12px' }}>
-                <span style={{ color: 'var(--accent-600)' }}>系统 {systemCount}</span>
-                <span style={{ color: 'var(--primary-600)' }}>普通 {customCount}</span>
-              </span>
+              <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
             </div>
           </div>
         )}

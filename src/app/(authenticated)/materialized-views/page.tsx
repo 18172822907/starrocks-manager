@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/ui';
 import {
   Box, RefreshCw, Search, Clock, Eye, Trash2, Play, X,
   ChevronUp, ChevronDown, ChevronsUpDown, Filter, Database,
@@ -144,6 +146,8 @@ export default function MaterializedViewsPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
 
+  const pg = usePagination(filtered);
+
   return (
     <>
       <div className="page-header">
@@ -227,7 +231,8 @@ export default function MaterializedViewsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((mv, idx) => {
+                {pg.paginatedData.map((mv, idx) => {
+                  const globalIdx = (pg.page - 1) * pg.pageSize + idx;
                   const name = str(mv.TABLE_NAME);
                   const db = str(mv.TABLE_SCHEMA);
                   const refreshType = str(mv.REFRESH_TYPE);
@@ -241,7 +246,7 @@ export default function MaterializedViewsPage() {
 
                   return (
                     <tr key={`${db}.${name}`}>
-                      <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.76rem' }}>{idx + 1}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.76rem' }}>{globalIdx + 1}</td>
                       <td>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                           <div style={{
@@ -325,15 +330,13 @@ export default function MaterializedViewsPage() {
             <div style={{
               padding: '8px 16px', borderTop: '1px solid var(--border-secondary)',
               fontSize: '0.78rem', color: 'var(--text-tertiary)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
             }}>
               <span>
                 共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个物化视图
                 {(search || dbFilter !== 'all' || statusFilter !== 'all') && ` (过滤自 ${views.length} 个)`}
               </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Box size={12} /> information_schema.materialized_views
-              </span>
+              <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
             </div>
           </div>
         )}

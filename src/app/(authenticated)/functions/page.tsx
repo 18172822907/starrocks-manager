@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/ui';
 import {
   Code2, RefreshCw, Search, Clock, Filter, Globe, Database,
   ChevronUp, ChevronDown, ChevronsUpDown,
@@ -87,6 +89,8 @@ export default function FunctionsPage() {
       ? getName(a).localeCompare(getName(b))
       : getName(b).localeCompare(getName(a))
     );
+
+  const pg = usePagination(filtered);
 
   return (
     <>
@@ -174,7 +178,8 @@ export default function FunctionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((fn, idx) => {
+                {pg.paginatedData.map((fn, idx) => {
+                  const globalIdx = (pg.page - 1) * pg.pageSize + idx;
                   const name = getName(fn);
                   const retType = getReturnType(fn);
                   const fnType = getFnType(fn);
@@ -184,7 +189,7 @@ export default function FunctionsPage() {
 
                   return (
                     <tr key={`${name}-${idx}`}>
-                      <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>{idx + 1}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>{globalIdx + 1}</td>
                       <td>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                           <div style={{
@@ -254,15 +259,13 @@ export default function FunctionsPage() {
             <div style={{
               padding: '10px 16px', borderTop: '1px solid var(--border-secondary)',
               fontSize: '0.78rem', color: 'var(--text-tertiary)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
             }}>
               <span>
                 共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个函数
                 {(search || typeFilter !== 'all' || scopeFilter !== 'all') && ` (过滤自 ${functions.length} 个)`}
               </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Code2 size={12} /> SHOW GLOBAL FULL FUNCTIONS + SHOW FULL FUNCTIONS IN db
-              </span>
+              <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
             </div>
           </div>
         )}

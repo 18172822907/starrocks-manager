@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/ui';
 import {
   Layers, Plus, Trash2, RefreshCw, Search, X, Clock, Edit3, PlusCircle,
   Cpu, MemoryStick, ChevronUp, ChevronDown, ChevronsUpDown, Activity, Hash, Zap, Database
@@ -279,6 +281,8 @@ export default function ResourceGroupsPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
 
+  const pg = usePagination(filtered);
+
   return (
     <>
       <div className="page-header">
@@ -373,7 +377,8 @@ export default function ResourceGroupsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((g, idx) => {
+                {pg.paginatedData.map((g, idx) => {
+                  const globalIdx = (pg.page - 1) * pg.pageSize + idx;
                   const classifiers = parseClassifiers(g.classifiers);
                   const isExpanded = expandedClassifiers.has(g.name);
                   const hasBigQuery = (g.big_query_cpu_second_limit && Number(g.big_query_cpu_second_limit) > 0)
@@ -383,7 +388,7 @@ export default function ResourceGroupsPage() {
                   return (
                     <tr key={g.name}>
                       {/* Sticky: # */}
-                      <td style={stickyLeft0Body}>{idx + 1}</td>
+                      <td style={stickyLeft0Body}>{globalIdx + 1}</td>
 
                       {/* Sticky: 名称 */}
                       <td style={stickyLeft44Body}>
@@ -550,10 +555,10 @@ export default function ResourceGroupsPage() {
             </table>
           </div>
 
-          <div style={{
+            <div style={{
             padding: '8px 16px',
             fontSize: '0.78rem', color: 'var(--text-tertiary)',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
             background: 'var(--bg-secondary)',
             borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
             border: '1px solid var(--border-primary)',
@@ -564,9 +569,7 @@ export default function ResourceGroupsPage() {
               共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个资源组
               {search && ` (过滤自 ${groups.length} 个)`}
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <Layers size={12} /> SHOW RESOURCE GROUPS ALL
-            </span>
+            <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
           </div>
           </>
         )}

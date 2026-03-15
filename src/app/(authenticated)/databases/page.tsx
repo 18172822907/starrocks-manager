@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/ui';
 import Link from 'next/link';
 import {
   Database, Search, Table2, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, ArrowRight, Clock
@@ -95,6 +97,8 @@ export default function DatabasesPage() {
     whiteSpace: 'nowrap',
   };
 
+  const pg = usePagination(filtered);
+
   return (
     <>
       {/* Page Header */}
@@ -173,11 +177,13 @@ export default function DatabasesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((db, idx) => (
+                {pg.paginatedData.map((db, idx) => {
+                  const globalIdx = (pg.page - 1) * pg.pageSize + idx;
+                  return (
                   <tr key={db.name}>
                     {/* Index */}
                     <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>
-                      {idx + 1}
+                      {globalIdx + 1}
                     </td>
 
                     {/* Name */}
@@ -233,7 +239,8 @@ export default function DatabasesPage() {
                       </Link>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
 
@@ -241,15 +248,13 @@ export default function DatabasesPage() {
             <div style={{
               padding: '10px 16px', borderTop: '1px solid var(--border-secondary)',
               fontSize: '0.78rem', color: 'var(--text-tertiary)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
             }}>
               <span>
                 共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个数据库
                 {search && ` (过滤自 ${databases.length} 个)`}
               </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Database size={12} /> 数据已缓存至本地 SQLite
-              </span>
+              <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
             </div>
           </div>
         )}
