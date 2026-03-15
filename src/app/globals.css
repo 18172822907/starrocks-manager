@@ -318,19 +318,20 @@ code, pre {
   margin-left: 240px;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
   min-width: 0;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .page-header {
-  padding: 20px 28px;
+  padding: 14px 24px;
   border-bottom: 1px solid var(--border-primary);
   background: var(--bg-primary);
   position: sticky;
   top: 0;
   z-index: 50;
   backdrop-filter: blur(8px);
+  flex-shrink: 0;
 }
 
 .page-header-row {
@@ -353,7 +354,9 @@ code, pre {
 
 .page-body {
   flex: 1;
-  padding: 24px 28px;
+  padding: 16px 24px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* ============================================
@@ -497,7 +500,7 @@ thead {
 }
 
 th {
-  padding: 10px 14px;
+  padding: 7px 12px;
   text-align: left;
   font-weight: 600;
   color: var(--text-secondary);
@@ -509,7 +512,7 @@ th {
 }
 
 td {
-  padding: 10px 14px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border-secondary);
   color: var(--text-primary);
 }
@@ -1188,7 +1191,7 @@ select.input {
 .gap-6 { gap: 24px; }
 .mt-2 { margin-top: 8px; }
 .mt-4 { margin-top: 16px; }
-.mb-4 { margin-bottom: 16px; }
+.mb-4 { margin-bottom: 10px; }
 .mb-6 { margin-bottom: 24px; }
 .text-sm { font-size: 0.85rem; }
 .text-xs { font-size: 0.75rem; }
