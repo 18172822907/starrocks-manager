@@ -1,30 +1,26 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useCallback } from 'react';
 import {
   X, Shield, Wrench, Database, Code2, FolderOpen, MoreHorizontal, Key,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { classifyGrants, type CatalogGroup, type CategorisedGroup, type ParsedPrivilege } from '@/utils/grantClassifier';
 
-const ICON_MAP: Record<string, React.ReactNode> = {
-  Shield:         <Shield size={12} />,
-  Wrench:         <Wrench size={12} />,
-  Database:       <Database size={12} />,
-  Code:           <Code2 size={12} />,
-  FolderOpen:     <FolderOpen size={12} />,
-  MoreHorizontal: <MoreHorizontal size={12} />,
+const ICON_MAP: Record<string, React.FC<{ size?: number }>> = {
+  Shield, Wrench, Database, Code: Code2, FolderOpen, MoreHorizontal,
 };
 
 interface PrivilegeDetailModalProps {
-  /** Display title prefix – e.g. "角色 r_bigdata" or "'starrocks'@'%'" */
   title: string;
   grants: string[];
   onClose: () => void;
 }
 
-function PrivilegeItem({ priv, idx }: { priv: ParsedPrivilege; idx: number }) {
+/* ── Single privilege item ──────────────────────────────────────────── */
+
+function PrivilegeItem({ priv }: { priv: ParsedPrivilege }) {
   if (!priv.privilege && !priv.target) {
-    // Unparsed raw grant
     return (
       <code style={{
         fontSize: '0.74rem', color: 'var(--text-secondary)',
@@ -34,7 +30,6 @@ function PrivilegeItem({ priv, idx }: { priv: ParsedPrivilege; idx: number }) {
       </code>
     );
   }
-
   return (
     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
       <code style={{
@@ -54,19 +49,35 @@ function PrivilegeItem({ priv, idx }: { priv: ParsedPrivilege; idx: number }) {
   );
 }
 
-function CategorySection({ group }: { group: CategorisedGroup }) {
+/* ── Collapsible category section ───────────────────────────────────── */
+
+function CategorySection({ group, defaultCollapsed = false }: {
+  group: CategorisedGroup;
+  defaultCollapsed?: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const IconComp = ICON_MAP[group.icon] || Key;
+  const Chevron = collapsed ? ChevronRight : ChevronDown;
+
   return (
-    <div style={{ marginBottom: '2px' }}>
-      {/* Category header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '6px',
-        padding: '5px 12px',
-        backgroundColor: group.bgColor,
-        borderRadius: 'var(--radius-sm)',
-        marginBottom: '2px',
-      }}>
+    <div id={group.sectionId} style={{ marginBottom: '2px' }}>
+      {/* Clickable category header */}
+      <div
+        onClick={() => setCollapsed(c => !c)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '5px 12px',
+          backgroundColor: group.bgColor,
+          borderRadius: 'var(--radius-sm)',
+          marginBottom: collapsed ? '0' : '2px',
+          cursor: 'pointer',
+          userSelect: 'none',
+          transition: 'background-color 0.15s',
+        }}
+      >
+        <Chevron size={13} style={{ color: group.color, flexShrink: 0 }} />
         <span style={{ color: group.color, display: 'flex', alignItems: 'center' }}>
-          {ICON_MAP[group.icon] || <Key size={12} />}
+          <IconComp size={12} />
         </span>
         <span style={{ fontSize: '0.74rem', fontWeight: 700, color: group.color }}>
           {group.label}
@@ -79,41 +90,43 @@ function CategorySection({ group }: { group: CategorisedGroup }) {
           {group.items.length}
         </span>
       </div>
-      {/* Items */}
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {group.items.map((priv, i) => (
-          <div key={i} style={{
-            display: 'flex', alignItems: 'flex-start', gap: '10px',
-            padding: '5px 12px 5px 30px',
-            borderBottomWidth: i < group.items.length - 1 ? '1px' : '0',
-            borderBottomStyle: 'solid',
-            borderBottomColor: 'var(--border-secondary)',
-          }}>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: '18px', height: '18px', borderRadius: '999px', flexShrink: 0,
-              fontSize: '0.62rem', fontWeight: 700,
-              backgroundColor: group.bgColor, color: group.color,
-              marginTop: '1px',
+      {/* Items — collapsible */}
+      {!collapsed && (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {group.items.map((priv, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: '10px',
+              padding: '5px 12px 5px 36px',
+              borderBottomWidth: i < group.items.length - 1 ? '1px' : '0',
+              borderBottomStyle: 'solid',
+              borderBottomColor: 'var(--border-secondary)',
             }}>
-              {i + 1}
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <PrivilegeItem priv={priv} idx={i} />
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: '18px', height: '18px', borderRadius: '999px', flexShrink: 0,
+                fontSize: '0.62rem', fontWeight: 700,
+                backgroundColor: group.bgColor, color: group.color,
+                marginTop: '1px',
+              }}>
+                {i + 1}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <PrivilegeItem priv={priv} />
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function CatalogSection({ group }: { group: CatalogGroup }) {
+/* ── Catalog scope section ──────────────────────────────────────────── */
+
+function CatalogSectionBlock({ group }: { group: CatalogGroup }) {
   const displayName = group.catalogName === 'default_catalog'
-    ? '内部 Catalog (default_catalog)'
-    : group.catalogName === '__all__'
-      ? '全局 (ALL CATALOGS)'
-      : `外部 Catalog: ${group.catalogName}`;
+    ? '内部权限'
+    : `外部 Catalog: ${group.catalogName}`;
 
   const scopeStyle = group.isInternal
     ? { color: 'var(--success-600)', bg: 'rgba(22,163,74,0.06)', border: 'rgba(22,163,74,0.15)' }
@@ -155,9 +168,44 @@ function CatalogSection({ group }: { group: CatalogGroup }) {
   );
 }
 
+/* ── Main Modal ─────────────────────────────────────────────────────── */
+
 export default function PrivilegeDetailModal({ title, grants, onClose }: PrivilegeDetailModalProps) {
   const catalogGroups = useMemo(() => classifyGrants(grants), [grants]);
   const totalCount = grants.length;
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // Collect all tags for summary bar
+  const allTags = useMemo(() => {
+    const tags: { label: string; count: number; sectionId: string; color: string; bgColor: string; borderColor: string }[] = [];
+    for (const cg of catalogGroups) {
+      for (const cat of cg.categories) {
+        // Merge same-category tags across catalogs in the summary
+        const existing = tags.find(t => t.label === cat.label);
+        if (existing) {
+          existing.count += cat.items.length;
+        } else {
+          tags.push({
+            label: cat.label,
+            count: cat.items.length,
+            sectionId: cat.sectionId,
+            color: cat.color,
+            bgColor: cat.bgColor,
+            borderColor: cat.borderColor,
+          });
+        }
+      }
+    }
+    return tags;
+  }, [catalogGroups]);
+
+  const scrollToSection = useCallback((sectionId: string) => {
+    if (!bodyRef.current) return;
+    const el = bodyRef.current.querySelector(`#${CSS.escape(sectionId)}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -176,26 +224,33 @@ export default function PrivilegeDetailModal({ title, grants, onClose }: Privile
           <button className="btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
         </div>
 
-        {/* Summary bar */}
+        {/* Summary bar — clickable tags */}
         <div className="modal-lg-summary">
-          {catalogGroups.map(cg => (
-            cg.categories.map((cat, ci) => (
-              <span key={`${cg.catalogName}-${ci}`} style={{
+          {allTags.map((tag, i) => (
+            <button
+              key={i}
+              onClick={() => scrollToSection(tag.sectionId)}
+              style={{
                 display: 'inline-flex', alignItems: 'center', gap: '3px',
-                padding: '1px 7px', borderRadius: '999px', fontSize: '0.68rem', fontWeight: 500,
-                backgroundColor: cat.bgColor, color: cat.color,
-                borderWidth: '1px', borderStyle: 'solid', borderColor: cat.borderColor,
-              }}>
-                {cat.label}: {cat.items.length}
-              </span>
-            ))
+                padding: '2px 8px', borderRadius: '999px', fontSize: '0.68rem', fontWeight: 600,
+                backgroundColor: tag.bgColor, color: tag.color,
+                borderWidth: '1px', borderStyle: 'solid', borderColor: tag.borderColor,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                outline: 'none',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'scale(1.03)'; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              {tag.label}: {tag.count}
+            </button>
           ))}
         </div>
 
         {/* Body – scrollable */}
-        <div className="modal-lg-body">
+        <div className="modal-lg-body" ref={bodyRef}>
           {catalogGroups.map((cg, i) => (
-            <CatalogSection key={i} group={cg} />
+            <CatalogSectionBlock key={i} group={cg} />
           ))}
         </div>
 

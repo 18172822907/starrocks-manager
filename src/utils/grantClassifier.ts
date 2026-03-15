@@ -6,10 +6,11 @@
  *   - ddl:      CREATE, ALTER, DROP, REFRESH on any object
  *   - dml:      SELECT, INSERT, UPDATE, DELETE, EXPORT
  *   - function: anything targeting FUNCTION / GLOBAL FUNCTIONS
- *   - catalog:  USAGE on CATALOG (grouped per catalog name)
+ *   - catalog:  USAGE on CATALOG / ALL CATALOGS (internal scope)
  *   - other:    anything that doesn't match
  *
- * Scope: internal (default_catalog or no catalog) vs external (named catalog).
+ * Scope: internal (default_catalog) vs external (named catalog).
+ * USAGE ON CATALOG is always internal regardless of catalog name.
  */
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ export interface CategorisedGroup {
   borderColor: string;
   icon: string;         // lucide icon name hint
   items: ParsedPrivilege[];
+  sectionId: string;    // unique id for scroll-to navigation
 }
 
 export interface CatalogGroup {
@@ -112,17 +114,15 @@ function classifyPrivilege(priv: ParsedPrivilege): PrivCategory {
 
 /**
  * Extract catalog name from target string.
+ * USAGE ON CATALOG is always internal, regardless of catalog name.
  * E.g. "ALL TABLES IN DATABASE bigdata" → "default_catalog" (internal)
- *      "CATALOG hive_catalog" → "hive_catalog"
- *      "ALL CATALOGS" → "__all__"
+ *      "CATALOG hive_catalog" → "default_catalog" (USAGE is internal)
+ *      "ALL CATALOGS" → "default_catalog" (internal)
  */
-function extractCatalog(target: string): string {
+function extractCatalog(target: string, category: PrivCategory): string {
   const upper = target.toUpperCase();
-  // "CATALOG xxx"
-  const catMatch = target.match(/^CATALOG\s+['`]?([^'`\s;]+)['`]?$/i);
-  if (catMatch) return catMatch[1];
-  // "ALL CATALOGS"
-  if (upper === 'ALL CATALOGS') return '__all__';
+  // USAGE ON CATALOG is always internal scope
+  if (category === 'catalog') return 'default_catalog';
   // SYSTEM, FUNCTION etc. → internal
   if (upper === 'SYSTEM' || upper.includes('FUNCTION') || upper.includes('WAREHOUSE') || upper.includes('RESOURCE GROUP')) {
     return 'default_catalog';
@@ -151,7 +151,7 @@ export function classifyGrants(grants: string[]): CatalogGroup[] {
       continue;
     }
     const category = classifyPrivilege(priv);
-    const catalog = extractCatalog(priv.target);
+    const catalog = extractCatalog(priv.target, category);
     parsed.push({ priv, category, catalog });
   }
 
@@ -180,23 +180,23 @@ export function classifyGrants(grants: string[]): CatalogGroup[] {
       const catItems = byCategory.get(cat);
       if (!catItems || catItems.length === 0) continue;
       const meta = CATEGORY_META[cat];
-      categories.push({ category: cat, items: catItems, ...meta });
+      // Unique section id for scroll-to navigation
+      const sectionId = `priv-${catName}-${cat}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+      categories.push({ category: cat, items: catItems, sectionId, ...meta });
     }
 
     result.push({
       catalogName: catName,
-      isInternal: catName === 'default_catalog' || catName === '__all__',
+      isInternal: catName === 'default_catalog',
       categories,
       totalCount: items.length,
     });
   }
 
-  // Sort: internal first, then __all__, then external alphabetically
+  // Sort: internal first, then external alphabetically
   result.sort((a, b) => {
     if (a.catalogName === 'default_catalog') return -1;
     if (b.catalogName === 'default_catalog') return 1;
-    if (a.catalogName === '__all__') return -1;
-    if (b.catalogName === '__all__') return 1;
     return a.catalogName.localeCompare(b.catalogName);
   });
 
