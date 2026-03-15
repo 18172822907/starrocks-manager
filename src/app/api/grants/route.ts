@@ -76,68 +76,40 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'sessionId and target required' }, { status: 400 });
     }
 
-    // Helper: extract GRANT statement from a row (last column that starts with "GRANT")
-    function extractGrant(row: Record<string, unknown>): string {
-      const vals = Object.values(row).map(v => String(v ?? ''));
-      // The GRANT column is typically the last or the one starting with "GRANT"
-      for (let i = vals.length - 1; i >= 0; i--) {
-        if (vals[i].startsWith('GRANT ')) return vals[i];
-      }
-      return vals.join(' | ');
-    }
+    // SHOW GRANTS FOR returns 3 columns: identity, catalog, grant statement.
+    // Detect column names from result fields to correctly identify catalog and grant columns.
+    const result = await executeQuery(sessionId, `SHOW GRANTS FOR ${target}`);
+    const rows = result.rows as Record<string, unknown>[];
+    const fieldNames = result.fields.map(f => f.name);
 
-    const grantMap = new Map<string, string>(); // grant → catalog
+    // Identify column names by pattern
+    const catalogCol = fieldNames.find(n => /catalog/i.test(n)) || '';
+    const grantCol = fieldNames.find(n => /grant|privileg/i.test(n)) || '';
 
-    // 1. Query grants on default catalog
-    try {
-      const result = await executeQuery(sessionId, `SHOW GRANTS FOR ${target}`);
-      const rows = result.rows as Record<string, unknown>[];
-      for (const r of rows) {
-        const grant = extractGrant(r);
-        if (!grantMap.has(grant)) grantMap.set(grant, 'default_catalog');
-      }
-    } catch {
-      // ignore
-    }
-
-    // 2. Get all catalogs
-    let catalogs: string[] = [];
-    try {
-      const catResult = await executeQuery(sessionId, 'SHOW CATALOGS');
-      const catRows = catResult.rows as Record<string, unknown>[];
-      catalogs = catRows
-        .map(r => String(Object.values(r)[0] || ''))
-        .filter(name => name && name !== 'default_catalog');
-    } catch {
-      // ignore
-    }
-
-    // 3. For each external catalog, SET CATALOG + SHOW GRANTS
-    for (const catalog of catalogs) {
-      try {
-        await executeQuery(sessionId, `SET CATALOG ${catalog}`);
-        const result = await executeQuery(sessionId, `SHOW GRANTS FOR ${target}`);
-        const rows = result.rows as Record<string, unknown>[];
-        for (const r of rows) {
-          const grant = extractGrant(r);
-          if (!grantMap.has(grant)) grantMap.set(grant, catalog);
-        }
-      } catch {
-        // skip catalogs we can't access
-      }
-    }
-
-    // 4. Switch back to default_catalog
-    try {
-      await executeQuery(sessionId, 'SET CATALOG default_catalog');
-    } catch {
-      // ignore
-    }
-
-    // Build response
     const grants: string[] = [];
     const catalogGrants: { grant: string; catalog: string }[] = [];
-    for (const [grant, catalog] of grantMap) {
+
+    for (const row of rows) {
+      let grant = '';
+      let catalog = 'default_catalog';
+
+      // Use identified column names if available
+      if (grantCol && row[grantCol] != null) {
+        grant = String(row[grantCol]);
+      }
+      if (catalogCol && row[catalogCol] != null) {
+        catalog = String(row[catalogCol]);
+      }
+
+      // Fallback: scan values if column name detection failed
+      if (!grant) {
+        const vals = Object.values(row).map(v => String(v ?? ''));
+        for (const val of vals) {
+          if (val.startsWith('GRANT ')) { grant = val; break; }
+        }
+        if (!grant) grant = vals.join(' | ');
+      }
+
       grants.push(grant);
       catalogGrants.push({ grant, catalog });
     }
@@ -150,3 +122,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

@@ -37,11 +37,9 @@ export default function RolesPage() {
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  // Grants per role
-  const [roleGrants, setRoleGrants] = useState<Record<string, string[]>>({});
-  const [roleCatalogGrants, setRoleCatalogGrants] = useState<Record<string, { grant: string; catalog: string }[]>>({});
-  // Privilege detail modal
+  // Privilege detail modal (lazy-loaded on click)
   const [showPrivDetail, setShowPrivDetail] = useState<{ role: string; grants: string[]; catalogGrants?: { grant: string; catalog: string }[] } | null>(null);
+  const [privLoading, setPrivLoading] = useState(false);
   // Grant privilege modal
   const [showPrivGrant, setShowPrivGrant] = useState<string | null>(null);
   const [privAction, setPrivAction] = useState<'grant_privilege' | 'revoke_privilege'>('grant_privilege');
@@ -64,21 +62,7 @@ export default function RolesPage() {
           String(r['Name'] || r['name'] || r['Value'] || Object.values(r)[0] || '')
         );
 
-        // Fetch grants for all roles in parallel before rendering
-        const grantResults: Record<string, string[]> = {};
-        const catalogGrantResults: Record<string, { grant: string; catalog: string }[]> = {};
-        await Promise.all(names.map(async (role) => {
-          try {
-            const gRes = await fetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=ROLE '${role}'`);
-            const gData = await gRes.json();
-            grantResults[role] = gData.grants || [];
-            catalogGrantResults[role] = gData.catalogGrants || [];
-          } catch { grantResults[role] = []; catalogGrantResults[role] = []; }
-        }));
-
         setRoles(names);
-        setRoleGrants(grantResults);
-        setRoleCatalogGrants(catalogGrantResults);
 
         const ts = data.cachedAt
           ? new Date(data.cachedAt).toLocaleString('zh-CN', { hour12: false })
@@ -249,8 +233,7 @@ export default function RolesPage() {
                     </span>
                   </th>
                   <th>类型</th>
-                  <th>权限项</th>
-                  <th style={{ textAlign: 'center', width: '100px' }}>操作</th>
+                  <th style={{ textAlign: 'center', width: '240px' }}>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -285,38 +268,60 @@ export default function RolesPage() {
                           {isSystem ? '● 系统角色' : '● 自定义角色'}
                         </span>
                       </td>
-                      {/* Privileges column */}
                       <td>
-                        {(() => {
-                          const grants = roleGrants[name] || [];
-                          if (grants.length === 0) return <span style={{ color: 'var(--text-tertiary)', fontSize: '0.76rem' }}>—</span>;
-                          return (
-                            <button
-                              onClick={() => setShowPrivDetail({ role: name, grants, catalogGrants: roleCatalogGrants[name] })}
-                              style={{
-                                display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                padding: '2px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 500,
-                                backgroundColor: 'rgba(37,99,235,0.06)', color: 'var(--primary-600)',
-                                borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(37,99,235,0.15)',
-                                cursor: 'pointer', transition: 'all 0.15s',
-                              }}
-                            >
-                              <Key size={10} />{grants.length} 项权限
-                              <Eye size={10} style={{ marginLeft: '2px', opacity: 0.6 }} />
-                            </button>
-                          );
-                        })()}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
-                          <button className="btn btn-ghost btn-icon" style={{ color: 'var(--primary-600)' }} onClick={() => setShowPrivGrant(name)} title="授权">
-                            <Shield size={14} />
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <button
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontSize: '0.76rem', fontWeight: 500,
+                              backgroundColor: 'rgba(37,99,235,0.06)', color: 'var(--primary-600)',
+                              border: '1px solid rgba(37,99,235,0.18)',
+                              cursor: privLoading ? 'wait' : 'pointer', transition: 'all 0.15s',
+                              opacity: privLoading ? 0.6 : 1,
+                            }}
+                            disabled={privLoading}
+                            onClick={async () => {
+                              if (!session) return;
+                              setPrivLoading(true);
+                              setError('');
+                              try {
+                                const gRes = await fetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(`ROLE '${name}'`)}`);
+                                const gData = await gRes.json();
+                                if (gData.error) { setError(gData.error); } else {
+                                  setShowPrivDetail({ role: name, grants: gData.grants || [], catalogGrants: gData.catalogGrants });
+                                }
+                              } catch (err) { setError(String(err)); }
+                              finally { setPrivLoading(false); }
+                            }}
+                          >
+                            <Eye size={12} /> 查看权限
                           </button>
-                          {!isSystem && (
-                            <button className="btn btn-ghost btn-icon" style={{ color: 'var(--danger-500)' }} onClick={() => handleDeleteRole(name)} title="删除角色">
-                              <Trash2 size={14} />
-                            </button>
-                          )}
+                          <button
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontSize: '0.76rem', fontWeight: 500,
+                              backgroundColor: 'rgba(22,163,74,0.06)', color: 'var(--success-600)',
+                              border: '1px solid rgba(22,163,74,0.18)',
+                              cursor: 'pointer', transition: 'all 0.15s',
+                            }}
+                            onClick={() => setShowPrivGrant(name)}
+                          >
+                            <Shield size={12} /> 授权
+                          </button>
+                          <button
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontSize: '0.76rem', fontWeight: 500,
+                              backgroundColor: 'rgba(239,68,68,0.06)', color: 'var(--danger-500)',
+                              border: '1px solid rgba(239,68,68,0.18)',
+                              cursor: isSystem ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
+                              opacity: isSystem ? 0.35 : 1,
+                            }}
+                            disabled={isSystem}
+                            onClick={() => !isSystem && handleDeleteRole(name)}
+                          >
+                            <Trash2 size={12} /> 删除
+                          </button>
                         </div>
                       </td>
                     </tr>
