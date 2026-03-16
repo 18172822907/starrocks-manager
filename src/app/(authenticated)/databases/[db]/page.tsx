@@ -148,8 +148,14 @@ export default function DatabaseDetailPage() {
                         </Link>
                       </td>
                       <td>
-                        <span className={`badge ${t.TABLE_TYPE === 'BASE TABLE' ? 'badge-info' : 'badge-neutral'}`}>
-                          {t.TABLE_TYPE === 'BASE TABLE' ? '表' : t.TABLE_TYPE}
+                        <span className={`badge ${
+                          t.TABLE_TYPE === 'BASE TABLE' ? 'badge-info' :
+                          t.TABLE_TYPE === 'MATERIALIZED VIEW' ? 'badge-warning' :
+                          'badge-neutral'
+                        }`}>
+                          {t.TABLE_TYPE === 'BASE TABLE' ? '表' :
+                           t.TABLE_TYPE === 'MATERIALIZED VIEW' ? '物化视图' :
+                           t.TABLE_TYPE === 'VIEW' ? '视图' : t.TABLE_TYPE}
                         </span>
                       </td>
                       <td className="text-xs">{t.ENGINE || '-'}</td>
