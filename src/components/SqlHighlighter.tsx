@@ -27,27 +27,8 @@ const SQL_KEYWORDS = new Set([
   'BEGIN', 'DECLARE', 'CALL', 'PROCEDURE', 'TRIGGER',
 ]);
 
-// Major clause keywords that should start a new line
-const NEWLINE_KEYWORDS = new Set([
-  'SELECT', 'FROM', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'LIMIT',
-  'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS', 'JOIN',
-  'UNION', 'EXCEPT', 'INTERSECT', 'SET', 'VALUES', 'INTO',
-  'PARTITION', 'DISTRIBUTED', 'REFRESH', 'PROPERTIES', 'COMMENT',
-  'ON', 'USING', 'WHEN', 'THEN', 'ELSE', 'END', 'CASE',
-  'AND', 'OR',
-]);
 
-// Keywords that increase indent
-const INDENT_INCREASE = new Set([
-  'SELECT', 'FROM', 'WHERE', 'GROUP', 'ORDER', 'HAVING',
-  'CASE', 'WHEN',
-]);
 
-// Keywords that decrease indent (relative to parent)
-const INDENT_DECREASE = new Set([
-  'FROM', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'LIMIT',
-  'END',
-]);
 
 interface SqlHighlighterProps {
   sql: string;
@@ -204,162 +185,350 @@ export default function SqlHighlighter({
 
 // ==================== SQL Formatter ====================
 
+/**
+ * Format SQL to match the reference style:
+ * - CREATE / ALTER / DROP statements on their own line
+ * - COMMENT, DISTRIBUTED, PARTITION BY, REFRESH, PROPERTIES, AS each on new line (indent 0)
+ * - PROPERTIES values indented 4 spaces, one per line
+ * - SELECT columns each on a new line, indented 4 spaces
+ * - FROM, LEFT/RIGHT/INNER JOIN at base indent
+ * - Subqueries indent deeper inside parentheses
+ * - Inline comments (--) preserved on same line
+ * - Original case preserved
+ */
 function formatSql(raw: string): string {
   if (!raw || !raw.trim()) return raw;
 
-  // Normalize whitespace first
-  let sql = raw.replace(/\r\n/g, '\n').replace(/\t/g, '  ');
-
-  // Tokenize into words, strings, punctuation etc for formatting
-  const fmtTokens = tokenizeForFormat(sql);
-  const result: string[] = [];
-  let indent = 0;
+  const tokens = tokenizeForFormat(raw);
+  const out: string[] = [];
+  const INDENT = '    '; // 4 spaces to match reference
+  let depth = 0;         // paren nesting depth
+  let selectDepth = -1;  // paren depth at which current SELECT lives
+  let inSelect = false;  // are we inside a SELECT column list?
+  let inProperties = false;
+  let propertiesParenDepth = -1;
   let lineStart = true;
-  let parenDepth = 0;
-  const indentStr = '  ';
-  let prevToken = '';
-  let afterSelect = false;
+  let parenCount = 0;    // raw paren nesting count
 
-  for (let i = 0; i < fmtTokens.length; i++) {
-    const tok = fmtTokens[i];
-    const upper = tok.toUpperCase();
-    const nextTok = i + 1 < fmtTokens.length ? fmtTokens[i + 1].toUpperCase() : '';
-
-    // Skip pure whitespace tokens
-    if (/^\s+$/.test(tok)) {
-      if (!lineStart && result.length > 0) {
-        // Preserve at most one space
-        const last = result[result.length - 1];
-        if (last && !last.endsWith(' ') && !last.endsWith('\n')) {
-          result.push(' ');
-        }
-      }
-      continue;
-    }
-
-    // Handle opening paren
-    if (tok === '(') {
-      if (!lineStart) result.push(' ');
-      result.push('(');
-      parenDepth++;
-      // check if it's a function paren or subquery
-      if (nextTok === 'SELECT') {
-        result.push('\n');
-        indent++;
-        result.push(indentStr.repeat(indent));
-        lineStart = true;
-      }
-      continue;
-    }
-
-    // Handle closing paren
-    if (tok === ')') {
-      if (parenDepth > 0) parenDepth--;
-      // if the indent was increased for subquery, decrease
-      const prevNonWs = prevToken.toUpperCase();
-      if (indent > 0 && (prevNonWs === '' || !['('].includes(prevNonWs))) {
-        // Check if this closes a subquery
-        const lookback = result.join('').trim();
-        if (lookback.includes('SELECT')) {
-          indent = Math.max(0, indent - 1);
-          result.push('\n');
-          result.push(indentStr.repeat(indent));
-        }
-      }
-      result.push(')');
-      lineStart = false;
-      prevToken = tok;
-      continue;
-    }
-
-    // Handle commas - new line after comma in SELECT clause
-    if (tok === ',') {
-      result.push(',');
-      if (afterSelect && parenDepth === 0) {
-        result.push('\n');
-        result.push(indentStr.repeat(indent + 1));
-        lineStart = true;
-      }
-      prevToken = tok;
-      continue;
-    }
-
-    // Handle semicolons
-    if (tok === ';') {
-      result.push(';\n');
-      indent = 0;
-      lineStart = true;
-      afterSelect = false;
-      prevToken = tok;
-      continue;
-    }
-
-    // Major SQL keywords that start new lines
-    if (NEWLINE_KEYWORDS.has(upper) && parenDepth === 0) {
-      // Special handling for compound keywords: GROUP BY, ORDER BY, LEFT JOIN etc
-      if ((upper === 'BY' && (prevToken.toUpperCase() === 'GROUP' || prevToken.toUpperCase() === 'ORDER' || prevToken.toUpperCase() === 'PARTITION' || prevToken.toUpperCase() === 'DISTRIBUTED'))) {
-        result.push(' ');
-        result.push(tok);
-        prevToken = tok;
-        lineStart = false;
-        continue;
-      }
-
-      if ((upper === 'JOIN') && ['LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS'].includes(prevToken.toUpperCase())) {
-        result.push(' ');
-        result.push(tok);
-        prevToken = tok;
-        lineStart = false;
-        continue;
-      }
-
-      if (upper === 'OUTER' && ['LEFT', 'RIGHT', 'FULL'].includes(prevToken.toUpperCase())) {
-        result.push(' ');
-        result.push(tok);
-        prevToken = tok;
-        lineStart = false;
-        continue;
-      }
-
-      // Start new line for major clauses
-      if (INDENT_DECREASE.has(upper)) {
-        indent = Math.max(0, indent > 0 ? indent - 1 : 0);
-      }
-
-      if (!lineStart) {
-        result.push('\n');
-      }
-      result.push(indentStr.repeat(indent));
-      result.push(tok);
-      lineStart = false;
-
-      if (upper === 'SELECT') {
-        afterSelect = true;
-        indent = Math.max(indent, 0);
-      } else if (['FROM', 'WHERE', 'SET'].includes(upper)) {
-        afterSelect = false;
-      }
-
-      if (INDENT_INCREASE.has(upper)) {
-        // indent will apply for the next content
-      }
-
-      prevToken = tok;
-      continue;
-    }
-
-    // Regular tokens
-    if (!lineStart) {
-      result.push(' ');
-    }
-    result.push(tok);
-    lineStart = false;
-    prevToken = tok;
+  function newline() {
+    out.push('\n');
+    out.push(INDENT.repeat(depth));
+    lineStart = true;
   }
 
-  let formatted = result.join('');
+  function space() {
+    if (out.length > 0) {
+      const last = out[out.length - 1];
+      if (last && !last.endsWith(' ') && !last.endsWith('\n')) {
+        out.push(' ');
+      }
+    }
+  }
 
-  // Clean up: remove trailing spaces on lines, collapse multiple blank lines
+  function peekUpper(offset: number): string {
+    for (let k = offset; k < tokens.length; k++) {
+      if (!/^\s+$/.test(tokens[k])) return tokens[k].toUpperCase();
+    }
+    return '';
+  }
+
+  function prevUpper(): string {
+    // find the last non-whitespace token we emitted
+    for (let k = out.length - 1; k >= 0; k--) {
+      const s = out[k].trim();
+      if (s) {
+        // get last word
+        const words = s.split(/\s+/);
+        return words[words.length - 1].toUpperCase();
+      }
+    }
+    return '';
+  }
+
+  // Top-level clause keywords that should start a new line at current depth
+  const TOP_CLAUSES = new Set([
+    'COMMENT', 'DISTRIBUTED', 'REFRESH', 'PROPERTIES', 'AS',
+  ]);
+
+  // Sub-clause keywords that start new line at current depth
+  const SUB_CLAUSES = new Set([
+    'SELECT', 'FROM', 'WHERE', 'HAVING', 'LIMIT', 'OFFSET',
+    'UNION', 'EXCEPT', 'INTERSECT',
+  ]);
+
+  // These start new line but at same depth as FROM
+  const JOIN_KEYWORDS = new Set([
+    'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS',
+  ]);
+
+  // Compound: these follow a preceding keyword on same line
+  const COMPOUND_FOLLOWERS = new Set([
+    'BY', 'JOIN', 'OUTER', 'ALL', 'DISTINCT',
+    'ASYNC', 'SYNC', 'MANUAL',
+    'MATERIALIZED',
+  ]);
+
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    const upper = tok.toUpperCase();
+    const next = peekUpper(i + 1);
+
+    // ---- Whitespace: collapse to single space ----
+    if (/^\s+$/.test(tok)) {
+      if (!lineStart) space();
+      continue;
+    }
+
+    // ---- Inline comments: emit on same line ----
+    if (tok.startsWith('--')) {
+      space();
+      out.push(tok);
+      continue;
+    }
+    if (tok.startsWith('/*')) {
+      space();
+      out.push(tok);
+      continue;
+    }
+
+    // ---- PROPERTIES block handling ----
+    if (upper === 'PROPERTIES') {
+      newline();
+      out.push(tok);
+      lineStart = false;
+      inProperties = true;
+      continue;
+    }
+
+    if (inProperties && tok === '(') {
+      space();
+      out.push('(');
+      propertiesParenDepth = depth;
+      depth++;
+      newline();
+      lineStart = true;
+      continue;
+    }
+
+    if (inProperties && tok === ')' && propertiesParenDepth >= 0) {
+      depth = propertiesParenDepth;
+      newline();
+      out.push(')');
+      lineStart = false;
+      inProperties = false;
+      propertiesParenDepth = -1;
+      continue;
+    }
+
+    if (inProperties && tok === ',') {
+      out.push(',');
+      newline();
+      lineStart = true;
+      continue;
+    }
+
+    // ---- PARTITION BY (compound on same line as previous) ----
+    if (upper === 'PARTITION') {
+      newline();
+      out.push(tok);
+      lineStart = false;
+      continue;
+    }
+
+    // ---- Compound followers: stay on current line ----
+    if (COMPOUND_FOLLOWERS.has(upper)) {
+      const prev = prevUpper();
+      // GROUP BY, ORDER BY, PARTITION BY, DISTRIBUTED BY
+      if (upper === 'BY' && ['GROUP', 'ORDER', 'PARTITION', 'DISTRIBUTED'].includes(prev)) {
+        space(); out.push(tok); lineStart = false; continue;
+      }
+      // LEFT JOIN, RIGHT JOIN, etc.
+      if (upper === 'JOIN' && JOIN_KEYWORDS.has(prev)) {
+        space(); out.push(tok); lineStart = false; continue;
+      }
+      // LEFT OUTER, RIGHT OUTER
+      if (upper === 'OUTER' && JOIN_KEYWORDS.has(prev)) {
+        space(); out.push(tok); lineStart = false; continue;
+      }
+      // UNION ALL
+      if (upper === 'ALL' && prev === 'UNION') {
+        space(); out.push(tok); lineStart = false; continue;
+      }
+      // SELECT DISTINCT
+      if (upper === 'DISTINCT' && prev === 'SELECT') {
+        space(); out.push(tok); lineStart = false; continue;
+      }
+      // REFRESH ASYNC, REFRESH SYNC, REFRESH MANUAL
+      if (['ASYNC', 'SYNC', 'MANUAL'].includes(upper) && prev === 'REFRESH') {
+        space(); out.push(tok); lineStart = false; continue;
+      }
+      // CREATE MATERIALIZED
+      if (upper === 'MATERIALIZED' && prev === 'CREATE') {
+        space(); out.push(tok); lineStart = false; continue;
+      }
+      // fall through if not compound
+    }
+
+    // ---- Top-level clauses at depth 0 (or base subquery depth) ----
+    if (TOP_CLAUSES.has(upper) && !inProperties) {
+      // COMMENT: only treat as top-level clause when not inside parens (column defs)
+      if (upper === 'COMMENT' && parenCount > 0) {
+        space(); out.push(tok); lineStart = false; continue;
+      }
+      if (upper === 'AS') {
+        // Only treat AS as top-level clause after PROPERTIES / before SELECT
+        // Not the column alias AS
+        if (next === 'SELECT' || next === '(') {
+          newline();
+          out.push(tok);
+          lineStart = false;
+          continue;
+        }
+        // Otherwise it's a column alias — stay inline
+        space(); out.push(tok); lineStart = false; continue;
+      }
+      newline();
+      out.push(tok);
+      lineStart = false;
+      continue;
+    }
+
+    // ---- GROUP, ORDER: start new line ----
+    if ((upper === 'GROUP' || upper === 'ORDER') && next === 'BY') {
+      newline();
+      out.push(tok);
+      lineStart = false;
+      continue;
+    }
+
+    // ---- Sub-clauses (SELECT, FROM, WHERE, etc.) ----
+    if (SUB_CLAUSES.has(upper)) {
+      if (upper === 'SELECT') {
+        newline();
+        out.push(tok);
+        lineStart = false;
+        inSelect = true;
+        selectDepth = depth;
+        continue;
+      }
+      if (upper === 'FROM' || upper === 'WHERE' || upper === 'HAVING' || upper === 'LIMIT' || upper === 'OFFSET') {
+        inSelect = false;
+        newline();
+        out.push(tok);
+        lineStart = false;
+        continue;
+      }
+      // UNION, EXCEPT, INTERSECT
+      newline();
+      out.push(tok);
+      lineStart = false;
+      continue;
+    }
+
+    // ---- JOIN keywords (LEFT, RIGHT, etc.) ----
+    if (JOIN_KEYWORDS.has(upper) && next === 'JOIN') {
+      inSelect = false;
+      newline();
+      out.push(tok);
+      lineStart = false;
+      continue;
+    }
+    // bare JOIN
+    if (upper === 'JOIN' && !JOIN_KEYWORDS.has(prevUpper())) {
+      inSelect = false;
+      newline();
+      out.push(tok);
+      lineStart = false;
+      continue;
+    }
+
+    // ---- AND / OR in WHERE clause ----
+    if ((upper === 'AND' || upper === 'OR') && !inSelect && depth === selectDepth) {
+      newline();
+      out.push(INDENT); // extra indent under WHERE
+      out.push(tok);
+      lineStart = false;
+      continue;
+    }
+
+    // ---- Comma in SELECT: new line for next column ----
+    if (tok === ',' && inSelect && depth === selectDepth) {
+      out.push(',');
+      newline();
+      out.push(INDENT); // columns at depth + 1 indent
+      lineStart = true;
+      continue;
+    }
+
+    // ---- Opening paren ----
+    if (tok === '(') {
+      parenCount++;
+      // If next is SELECT → subquery, increase depth
+      if (next === 'SELECT') {
+        space();
+        out.push('(');
+        depth++;
+        continue;
+      }
+      // else function call paren or PROPERTIES — stay inline
+      if (!lineStart && out.length > 0) {
+        const last = out[out.length - 1];
+        // No space before paren if previous is a word (function call)
+        if (last && /[a-zA-Z0-9_`]$/.test(last.trim())) {
+          // no space
+        } else {
+          space();
+        }
+      }
+      out.push('(');
+      lineStart = false;
+      continue;
+    }
+
+    // ---- Closing paren ----
+    if (tok === ')') {
+      if (parenCount > 0) parenCount--;
+      // Check if we're closing a subquery
+      if (depth > 0) {
+        depth--;
+        if (inSelect && depth < selectDepth) {
+          inSelect = false;
+        }
+      }
+      out.push(')');
+      lineStart = false;
+      continue;
+    }
+
+    // ---- Semicolon ----
+    if (tok === ';') {
+      out.push(';');
+      newline();
+      depth = 0;
+      inSelect = false;
+      selectDepth = -1;
+      continue;
+    }
+
+    // ---- ON (after JOIN) ----
+    if (upper === 'ON' && !inSelect) {
+      space();
+      out.push(tok);
+      lineStart = false;
+      continue;
+    }
+
+    // ---- Regular token ----
+    if (!lineStart) {
+      space();
+    }
+    out.push(tok);
+    lineStart = false;
+  }
+
+  let formatted = out.join('');
+
+  // Post-processing cleanup
   formatted = formatted
     .split('\n')
     .map(line => line.trimEnd())
@@ -408,8 +577,8 @@ function tokenizeForFormat(sql: string): string[] {
       continue;
     }
 
-    // Comments --
-    if (sql[i] === '-' && sql[i + 1] === '-') {
+    // Inline comments --
+    if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
       let j = i;
       while (j < sql.length && sql[j] !== '\n') j++;
       tokens.push(sql.slice(i, j));
@@ -417,8 +586,8 @@ function tokenizeForFormat(sql: string): string[] {
       continue;
     }
 
-    // Block comments
-    if (sql[i] === '/' && sql[i + 1] === '*') {
+    // Block comments /* */
+    if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
       let j = i + 2;
       while (j < sql.length - 1 && !(sql[j] === '*' && sql[j + 1] === '/')) j++;
       j += 2;
