@@ -761,9 +761,19 @@ export default function UsersPage() {
                               <span style={{ marginLeft: '4px', fontSize: '0.65rem', opacity: 0.6 }}>已分配</span>
                             )}
                             {rolePrivCache[r] ? (
-                              <span style={{ marginLeft: '4px', fontSize: '0.5rem', color: 'var(--success-500)' }}>●</span>
+                              <span style={{
+                                marginLeft: '5px', fontSize: '0.6rem', fontWeight: 600,
+                                padding: '0 5px', borderRadius: '999px',
+                                backgroundColor: 'rgba(22,163,74,0.1)', color: 'var(--success-600)',
+                                border: '1px solid rgba(22,163,74,0.2)',
+                              }}>✓</span>
                             ) : (
-                              <span style={{ marginLeft: '4px', fontSize: '0.7rem', color: 'var(--text-tertiary)', opacity: 0.4 }}>·</span>
+                              <span style={{
+                                marginLeft: '5px', fontSize: '0.58rem', fontWeight: 500,
+                                padding: '0 5px', borderRadius: '999px',
+                                backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-tertiary)',
+                                border: '1px solid var(--border-secondary)',
+                              }}>未加载</span>
                             )}
                           </button>
                         ))}
