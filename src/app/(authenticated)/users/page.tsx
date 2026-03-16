@@ -696,7 +696,7 @@ export default function UsersPage() {
                         }}
                       >
                         <option value="">请选择角色...</option>
-                        {allRoles.map(r => (
+                        {allRoles.filter(r => !['root', 'cluster_admin', 'db_admin', 'user_admin', 'public'].includes(r)).map(r => (
                           <option key={r} value={r}>{r}{existingRoles.includes(r) ? ' ✓' : ''}</option>
                         ))}
                       </select>

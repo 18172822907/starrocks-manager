@@ -302,9 +302,12 @@ export default function RolesPage() {
                               padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontSize: '0.76rem', fontWeight: 500,
                               backgroundColor: 'rgba(22,163,74,0.06)', color: 'var(--success-600)',
                               border: '1px solid rgba(22,163,74,0.18)',
-                              cursor: 'pointer', transition: 'all 0.15s',
+                              cursor: isSystem ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
+                              opacity: isSystem ? 0.35 : 1,
                             }}
-                            onClick={() => setShowPrivGrant(name)}
+                            disabled={isSystem}
+                            title={isSystem ? '系统角色不可通过UI授权' : '授权'}
+                            onClick={() => !isSystem && setShowPrivGrant(name)}
                           >
                             <Shield size={12} /> 授权
                           </button>
