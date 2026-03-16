@@ -448,25 +448,24 @@ export default function UsersPage() {
                           >
                             <UserPlus size={12} /> 角色
                           </button>
-                          {!isSystem && (
-                            <>
-                              <span style={{ width: '1px', height: '16px', backgroundColor: 'var(--border-secondary)', margin: '0 2px' }} />
-                              <button
-                                className="btn btn-ghost btn-icon"
-                                style={{
-                                  color: 'var(--text-tertiary)',
-                                  padding: '4px', borderRadius: '6px',
-                                  transition: 'all 0.15s',
-                                }}
-                                onClick={() => handleDelete(u.identity)}
-                                title="删除用户"
-                                onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger-500)'; e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.08)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent'; }}
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </>
-                          )}
+                          <span style={{ width: '1px', height: '16px', backgroundColor: 'var(--border-secondary)', margin: '0 2px' }} />
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            disabled={isSystem}
+                            style={{
+                              color: isSystem ? 'var(--text-quaternary, #d1d5db)' : 'var(--text-tertiary)',
+                              padding: '4px', borderRadius: '6px',
+                              transition: 'all 0.15s',
+                              opacity: isSystem ? 0.4 : 1,
+                              cursor: isSystem ? 'not-allowed' : 'pointer',
+                            }}
+                            onClick={() => !isSystem && handleDelete(u.identity)}
+                            title={isSystem ? '系统用户不可删除' : '删除用户'}
+                            onMouseEnter={e => { if (!isSystem) { e.currentTarget.style.color = 'var(--danger-500)'; e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.08)'; } }}
+                            onMouseLeave={e => { if (!isSystem) { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.backgroundColor = 'transparent'; } }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </td>
                     </tr>
