@@ -760,6 +760,11 @@ export default function UsersPage() {
                             {existingRoles.includes(r) && (
                               <span style={{ marginLeft: '4px', fontSize: '0.65rem', opacity: 0.6 }}>已分配</span>
                             )}
+                            {rolePrivCache[r] ? (
+                              <span style={{ marginLeft: '4px', fontSize: '0.5rem', color: 'var(--success-500)' }}>●</span>
+                            ) : (
+                              <span style={{ marginLeft: '4px', fontSize: '0.7rem', color: 'var(--text-tertiary)', opacity: 0.4 }}>·</span>
+                            )}
                           </button>
                         ))}
                       </div>
