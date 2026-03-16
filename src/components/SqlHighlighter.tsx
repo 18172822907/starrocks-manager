@@ -89,6 +89,65 @@ export default function SqlHighlighter({
 
   return (
     <div style={{ position: 'relative', ...style }}>
+      {/* Floating toolbar: copy + format toggle */}
+      {(showFormatToggle || onCopy) && (
+        <div style={{
+          position: 'absolute',
+          top: '6px',
+          right: '6px',
+          zIndex: 3,
+          display: 'flex',
+          gap: '4px',
+        }}>
+          {onCopy && (
+            <button
+              onClick={onCopy}
+              style={{
+                padding: '3px 10px', borderRadius: '4px', fontSize: '0.72rem',
+                border: '1px solid rgba(255,255,255,0.1)',
+                backgroundColor: copied ? 'rgba(166,227,161,0.15)' : 'rgba(24,24,37,0.85)',
+                color: copied ? '#a6e3a1' : '#6c7086',
+                cursor: 'pointer', transition: 'all 0.15s',
+                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                fontFamily: "'JetBrains Mono', monospace",
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              {copied ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                </svg>
+              )}
+              {copied ? '已复制' : '复制'}
+            </button>
+          )}
+          {showFormatToggle && (
+            <button
+              onClick={() => setFormatted(f => !f)}
+              style={{
+                padding: '3px 10px', borderRadius: '4px', fontSize: '0.72rem',
+                border: '1px solid rgba(255,255,255,0.1)',
+                backgroundColor: formatted ? 'rgba(203,166,247,0.15)' : 'rgba(24,24,37,0.85)',
+                color: formatted ? '#cba6f7' : '#6c7086',
+                cursor: 'pointer', transition: 'all 0.15s',
+                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                fontFamily: "'JetBrains Mono', monospace",
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="4 7 4 4 20 4 20 7" /><line x1="9" y1="20" x2="15" y2="20" /><line x1="12" y1="4" x2="12" y2="20" />
+              </svg>
+              {formatted ? '已美化' : '美化 SQL'}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Code area with line numbers */}
       <pre style={{
         margin: 0,
@@ -104,75 +163,7 @@ export default function SqlHighlighter({
         overflowX: 'auto',
         lineHeight: 1.7,
         display: 'flex',
-        position: 'relative',
       }}>
-        {/* Floating toolbar: copy + format toggle */}
-        {(showFormatToggle || onCopy) && (
-          <div style={{
-            position: 'sticky',
-            top: 0,
-            right: 0,
-            zIndex: 2,
-            display: 'flex',
-            gap: '4px',
-            padding: '6px 8px',
-            pointerEvents: 'none',
-            marginLeft: 'auto',
-            width: 0,
-            overflow: 'visible',
-            whiteSpace: 'nowrap',
-            flexDirection: 'row-reverse',
-          }}>
-            {showFormatToggle && (
-              <button
-                onClick={() => setFormatted(f => !f)}
-                style={{
-                  pointerEvents: 'auto',
-                  padding: '3px 10px', borderRadius: '4px', fontSize: '0.72rem',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  backgroundColor: formatted ? 'rgba(203,166,247,0.15)' : 'rgba(24,24,37,0.85)',
-                  color: formatted ? '#cba6f7' : '#6c7086',
-                  cursor: 'pointer', transition: 'all 0.15s',
-                  display: 'inline-flex', alignItems: 'center', gap: '4px',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  backdropFilter: 'blur(8px)',
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="4 7 4 4 20 4 20 7" /><line x1="9" y1="20" x2="15" y2="20" /><line x1="12" y1="4" x2="12" y2="20" />
-                </svg>
-                {formatted ? '已美化' : '美化 SQL'}
-              </button>
-            )}
-            {onCopy && (
-              <button
-                onClick={onCopy}
-                style={{
-                  pointerEvents: 'auto',
-                  padding: '3px 10px', borderRadius: '4px', fontSize: '0.72rem',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  backgroundColor: copied ? 'rgba(166,227,161,0.15)' : 'rgba(24,24,37,0.85)',
-                  color: copied ? '#a6e3a1' : '#6c7086',
-                  cursor: 'pointer', transition: 'all 0.15s',
-                  display: 'inline-flex', alignItems: 'center', gap: '4px',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  backdropFilter: 'blur(8px)',
-                }}
-              >
-                {copied ? (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                ) : (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                  </svg>
-                )}
-                {copied ? '已复制' : '复制'}
-              </button>
-            )}
-          </div>
-        )}
         {/* Line numbers gutter */}
         {showLineNumbers && (
           <div
