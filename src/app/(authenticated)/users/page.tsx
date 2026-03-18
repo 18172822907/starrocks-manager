@@ -247,10 +247,10 @@ export default function UsersPage() {
   async function openGrantModal(identity: string) {
     setShowGrant(identity);
     setGrantCategory('dml');
-    setGrantPrivs(new Set(['SELECT']));
-    setGrantCatalog('default_catalog');
+    setGrantPrivs(new Set());
+    setGrantCatalog('');
     setGrantDb('');
-    setGrantScope('all_tables');
+    setGrantScope('');
     setGrantSpecific('');
     setGrantSubmitting(false);
     setGrantExisting([]);
@@ -316,6 +316,7 @@ export default function UsersPage() {
     if (grantCategory === 'system') {
       return `${action} ${privStr} ON SYSTEM ${toFrom} ${showGrant}`;
     }
+    if (!grantScope) return '';
     if (grantCategory === 'catalog') {
       if (grantScope === 'all_catalogs') {
         return `${action} ${privStr} ON ALL CATALOGS ${toFrom} ${showGrant}`;
