@@ -9,26 +9,40 @@ export interface SearchableSelectOption {
   value: string;
 }
 
-interface SearchableSelectProps {
-  options: SearchableSelectOption[];
+interface SingleSelectProps {
+  multiple?: false;
   value: string;
   onChange: (value: string) => void;
+  multiValue?: never;
+  onMultiChange?: never;
+}
+
+interface MultiSelectProps {
+  multiple: true;
+  multiValue: Set<string>;
+  onMultiChange: (values: Set<string>) => void;
+  value?: never;
+  onChange?: never;
+}
+
+type SearchableSelectProps = (SingleSelectProps | MultiSelectProps) & {
+  options: SearchableSelectOption[];
   placeholder?: string;
   searchPlaceholder?: string;
   disabled?: boolean;
-  /** Min items before search input is shown (default: 6) */
   searchThreshold?: number;
-}
+};
 
-export default function SearchableSelect({
-  options,
-  value,
-  onChange,
-  placeholder = '请选择...',
-  searchPlaceholder = '搜索...',
-  disabled = false,
-  searchThreshold = 6,
-}: SearchableSelectProps) {
+export default function SearchableSelect(props: SearchableSelectProps) {
+  const {
+    options,
+    placeholder = '请选择...',
+    searchPlaceholder = '搜索...',
+    disabled = false,
+    searchThreshold = 6,
+    multiple = false,
+  } = props;
+
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
@@ -36,14 +50,12 @@ export default function SearchableSelect({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Compute position when opening
   useEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
   }, [open]);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     function handler(e: MouseEvent) {
@@ -60,7 +72,6 @@ export default function SearchableSelect({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  // Close on scroll of any ancestor (reposition would be complex)
   useEffect(() => {
     if (!open) return;
     function handler() {
@@ -68,12 +79,10 @@ export default function SearchableSelect({
       const rect = triggerRef.current.getBoundingClientRect();
       setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
     }
-    // Listen to scroll on capture phase to catch modal scroll
     document.addEventListener('scroll', handler, true);
     return () => document.removeEventListener('scroll', handler, true);
   }, [open]);
 
-  // Focus search input when opened
   useEffect(() => {
     if (open && inputRef.current) {
       inputRef.current.focus();
@@ -85,14 +94,47 @@ export default function SearchableSelect({
     opt.value.toLowerCase().includes(query.toLowerCase())
   );
 
-  const selectedLabel = options.find(o => o.value === value)?.label || '';
   const showSearch = options.length >= searchThreshold;
 
+  // Single-select helpers
+  const singleValue = multiple ? '' : (props as SingleSelectProps).value;
+  const singleOnChange = multiple ? undefined : (props as SingleSelectProps).onChange;
+
+  // Multi-select helpers
+  const multiValue = multiple ? (props as MultiSelectProps).multiValue : new Set<string>();
+  const multiOnChange = multiple ? (props as MultiSelectProps).onMultiChange : undefined;
+
+  const isSelected = useCallback((val: string) => {
+    return multiple ? multiValue.has(val) : singleValue === val;
+  }, [multiple, multiValue, singleValue]);
+
   const handleSelect = useCallback((val: string) => {
-    onChange(val);
-    setOpen(false);
-    setQuery('');
-  }, [onChange]);
+    if (multiple && multiOnChange) {
+      const next = new Set(multiValue);
+      if (next.has(val)) next.delete(val);
+      else next.add(val);
+      multiOnChange(next);
+      // Don't close on multi-select
+    } else if (singleOnChange) {
+      singleOnChange(val);
+      setOpen(false);
+      setQuery('');
+    }
+  }, [multiple, multiValue, multiOnChange, singleOnChange]);
+
+  // Display text for trigger
+  let displayText = '';
+  if (multiple) {
+    const count = multiValue.size;
+    if (count === 0) displayText = '';
+    else if (count <= 2) {
+      displayText = Array.from(multiValue).map(v => options.find(o => o.value === v)?.label || v).join(', ');
+    } else {
+      displayText = `已选 ${count} 项`;
+    }
+  } else {
+    displayText = options.find(o => o.value === singleValue)?.label || '';
+  }
 
   const dropdown = open ? (
     <div
@@ -123,6 +165,12 @@ export default function SearchableSelect({
           )}
         </div>
       )}
+      {multiple && multiValue.size > 0 && (
+        <div className="ss-multi-bar">
+          <span>已选 {multiValue.size} 项</span>
+          <button className="ss-clear-all" onClick={() => multiOnChange?.(new Set())}>清空</button>
+        </div>
+      )}
       <div className="ss-list">
         {filtered.length === 0 ? (
           <div className="ss-empty">无匹配项</div>
@@ -130,11 +178,16 @@ export default function SearchableSelect({
           filtered.map(opt => (
             <div
               key={opt.value}
-              className={`ss-option${opt.value === value ? ' ss-selected' : ''}`}
+              className={`ss-option${isSelected(opt.value) ? ' ss-selected' : ''}`}
               onClick={() => handleSelect(opt.value)}
             >
+              {multiple && (
+                <span className={`ss-checkbox${isSelected(opt.value) ? ' ss-checked' : ''}`}>
+                  {isSelected(opt.value) && <Check size={11} />}
+                </span>
+              )}
               <span className="ss-option-label">{opt.label}</span>
-              {opt.value === value && <Check size={14} className="ss-check" />}
+              {!multiple && isSelected(opt.value) && <Check size={14} className="ss-check" />}
             </div>
           ))
         )}
@@ -144,7 +197,6 @@ export default function SearchableSelect({
 
   return (
     <div className="ss-container">
-      {/* Trigger */}
       <button
         ref={triggerRef}
         type="button"
@@ -152,13 +204,11 @@ export default function SearchableSelect({
         onClick={() => !disabled && setOpen(!open)}
         disabled={disabled}
       >
-        <span className={`ss-value${!value ? ' ss-placeholder' : ''}`}>
-          {value ? selectedLabel : placeholder}
+        <span className={`ss-value${!displayText ? ' ss-placeholder' : ''}`}>
+          {displayText || placeholder}
         </span>
         <ChevronDown size={14} className={`ss-chevron${open ? ' ss-rotated' : ''}`} />
       </button>
-
-      {/* Portal dropdown to body so it's not clipped by modal overflow */}
       {typeof document !== 'undefined' && createPortal(dropdown, document.body)}
     </div>
   );

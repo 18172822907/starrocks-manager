@@ -67,6 +67,8 @@ export default function UsersPage() {
   const [grantScope, setGrantScope] = useState(''); // all_dbs | database | all_in_db | specific
   const [grantObjType, setGrantObjType] = useState('table'); // table | view | mv
   const [grantSpecific, setGrantSpecific] = useState('');
+  const [grantDbMulti, setGrantDbMulti] = useState<Set<string>>(new Set()); // multi-select DBs
+  const [grantSpecificMulti, setGrantSpecificMulti] = useState<Set<string>>(new Set()); // multi-select tables
   const [grantCatalogs, setGrantCatalogs] = useState<string[]>([]);
   const [grantDbs, setGrantDbs] = useState<string[]>([]);
   const [grantTables, setGrantTables] = useState<string[]>([]);
@@ -370,7 +372,9 @@ export default function UsersPage() {
       return `${action} ${privStr} ON ALL DATABASES ${toFrom} ${showGrant}`;
     }
     if (grantScope === 'database') {
-      return `${action} ${privStr} ON DATABASE ${grantDb} ${toFrom} ${showGrant}`;
+      const dbs = Array.from(grantDbMulti);
+      if (dbs.length === 0) return '';
+      return dbs.map(db => `${action} ${privStr} ON DATABASE ${db} ${toFrom} ${showGrant}`).join(';\n');
     }
     if (grantScope === 'all_in_db') {
       const objMap: Record<string, string> = { table: 'ALL TABLES', view: 'ALL VIEWS', mv: 'ALL MATERIALIZED VIEWS' };
@@ -378,29 +382,32 @@ export default function UsersPage() {
     }
     if (grantScope === 'specific') {
       const objMap: Record<string, string> = { table: 'TABLE', view: 'VIEW', mv: 'MATERIALIZED VIEW' };
-      return `${action} ${privStr} ON ${objMap[grantObjType] || 'TABLE'} ${grantDb}.${grantSpecific || '...'} ${toFrom} ${showGrant}`;
+      const items = Array.from(grantSpecificMulti);
+      if (items.length === 0) return '';
+      return items.map(item => `${action} ${privStr} ON ${objMap[grantObjType] || 'TABLE'} ${grantDb}.${item} ${toFrom} ${showGrant}`).join(';\n');
     }
     return '';
   }
 
   async function handleGrantSubmit(action: 'GRANT' | 'REVOKE') {
     if (!session || !showGrant) return;
-    const sql = buildGrantSQL(action);
-    if (!sql) return;
+    const sqlBlock = buildGrantSQL(action);
+    if (!sqlBlock) return;
     setGrantSubmitting(true);
     setError('');
     try {
-      const res = await fetch('/api/query', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.sessionId, sql }),
-      });
-      const data = await res.json();
-      if (data.error) setError(data.error);
-      else {
-        setSuccess(`${action === 'GRANT' ? '授权' : '撤销'}成功`);
-        setShowGrant(null);
-        fetchUsers(true);
+      const statements = sqlBlock.split(';\n').map(s => s.trim()).filter(Boolean);
+      for (const sql of statements) {
+        const res = await fetch('/api/query', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.sessionId, sql }),
+        });
+        const data = await res.json();
+        if (data.error) { setError(data.error); return; }
       }
+      setSuccess(`${action === 'GRANT' ? '授权' : '撤销'}成功 (${statements.length} 条)`);
+      setShowGrant(null);
+      fetchUsers(true);
     } catch (err) { setError(String(err)); }
     finally { setGrantSubmitting(false); }
   }
@@ -942,6 +949,8 @@ export default function UsersPage() {
                               onChange={val => {
                                 setGrantScope(val);
                                 setGrantSpecific('');
+                                setGrantDbMulti(new Set());
+                                setGrantSpecificMulti(new Set());
                                 if (val !== 'all_dbs' && val !== '' && grantDbs.length === 0) {
                                   loadGrantDbs(grantCatalog);
                                 }
@@ -970,14 +979,27 @@ export default function UsersPage() {
                               />
                             </div>
                           )}
-                          {grantScope !== 'all_dbs' && grantScope !== '' && (
+                          {/* Database: multi-select for 'database' scope, single for others */}
+                          {grantScope === 'database' && (
+                            <div className="cascade-col">
+                              <label>Database（可多选）</label>
+                              <SearchableSelect
+                                multiple
+                                multiValue={grantDbMulti}
+                                onMultiChange={setGrantDbMulti}
+                                placeholder="选择数据库（多选）"
+                                options={grantDbs.map(d => ({ label: d, value: d }))}
+                              />
+                            </div>
+                          )}
+                          {(grantScope === 'all_in_db' || grantScope === 'specific') && (
                             <div className="cascade-col">
                               <label>Database</label>
                               <SearchableSelect
                                 value={grantDb}
                                 onChange={val => {
                                   setGrantDb(val);
-                                  setGrantSpecific('');
+                                  setGrantSpecificMulti(new Set());
                                   if (grantScope === 'specific') {
                                     loadGrantTables(grantCatalog, val);
                                   }
@@ -989,10 +1011,11 @@ export default function UsersPage() {
                           )}
                           {grantScope === 'specific' && (
                             <div className="cascade-col">
-                              <label>{grantObjType === 'table' ? '表名' : grantObjType === 'view' ? '视图名' : 'MV名'}</label>
+                              <label>{grantObjType === 'table' ? '表名' : grantObjType === 'view' ? '视图名' : 'MV名'}（可多选）</label>
                               <SearchableSelect
-                                value={grantSpecific}
-                                onChange={setGrantSpecific}
+                                multiple
+                                multiValue={grantSpecificMulti}
+                                onMultiChange={setGrantSpecificMulti}
                                 placeholder={grantObjType === 'table' ? '搜索表名...' : grantObjType === 'view' ? '搜索视图...' : '搜索 MV...'}
                                 searchPlaceholder="输入关键字搜索..."
                                 options={grantTables.map(t => ({ label: t, value: t }))}
