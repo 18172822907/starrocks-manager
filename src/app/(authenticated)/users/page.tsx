@@ -64,7 +64,8 @@ export default function UsersPage() {
   const [grantPrivs, setGrantPrivs] = useState<Set<string>>(new Set());
   const [grantCatalog, setGrantCatalog] = useState('default_catalog');
   const [grantDb, setGrantDb] = useState('');
-  const [grantScope, setGrantScope] = useState('');
+  const [grantScope, setGrantScope] = useState(''); // all_dbs | database | all_in_db | specific
+  const [grantObjType, setGrantObjType] = useState('table'); // table | view | mv
   const [grantSpecific, setGrantSpecific] = useState('');
   const [grantCatalogs, setGrantCatalogs] = useState<string[]>([]);
   const [grantDbs, setGrantDbs] = useState<string[]>([]);
@@ -364,30 +365,20 @@ export default function UsersPage() {
       }
       return `${action} ${privStr} ON GLOBAL FUNCTION ${grantSpecific || '...'} ${toFrom} ${showGrant}`;
     }
-    // DDL / DML
+    // DDL / DML — uses grantScope + grantObjType
     if (grantScope === 'all_dbs') {
       return `${action} ${privStr} ON ALL DATABASES ${toFrom} ${showGrant}`;
-    }
-    if (grantScope === 'all_tables') {
-      return `${action} ${privStr} ON ALL TABLES IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
-    }
-    if (grantScope === 'all_views') {
-      return `${action} ${privStr} ON ALL VIEWS IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
-    }
-    if (grantScope === 'all_mvs') {
-      return `${action} ${privStr} ON ALL MATERIALIZED VIEWS IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
     }
     if (grantScope === 'database') {
       return `${action} ${privStr} ON DATABASE ${grantDb} ${toFrom} ${showGrant}`;
     }
-    if (grantScope === 'specific_table') {
-      return `${action} ${privStr} ON TABLE ${grantDb}.${grantSpecific || '...'} ${toFrom} ${showGrant}`;
+    if (grantScope === 'all_in_db') {
+      const objMap: Record<string, string> = { table: 'ALL TABLES', view: 'ALL VIEWS', mv: 'ALL MATERIALIZED VIEWS' };
+      return `${action} ${privStr} ON ${objMap[grantObjType] || 'ALL TABLES'} IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
     }
-    if (grantScope === 'specific_view') {
-      return `${action} ${privStr} ON VIEW ${grantDb}.${grantSpecific || '...'} ${toFrom} ${showGrant}`;
-    }
-    if (grantScope === 'specific_mv') {
-      return `${action} ${privStr} ON MATERIALIZED VIEW ${grantDb}.${grantSpecific || '...'} ${toFrom} ${showGrant}`;
+    if (grantScope === 'specific') {
+      const objMap: Record<string, string> = { table: 'TABLE', view: 'VIEW', mv: 'MATERIALIZED VIEW' };
+      return `${action} ${privStr} ON ${objMap[grantObjType] || 'TABLE'} ${grantDb}.${grantSpecific || '...'} ${toFrom} ${showGrant}`;
     }
     return '';
   }
@@ -926,7 +917,7 @@ export default function UsersPage() {
                           )}
                         </>
                       ) : (
-                        /* DDL / DML */
+                        /* DDL / DML — simplified 2-level */
                         <>
                           <div className="cascade-col">
                             <label>Catalog</label>
@@ -950,27 +941,35 @@ export default function UsersPage() {
                               value={grantScope}
                               onChange={val => {
                                 setGrantScope(val);
-                                const needsDb = val !== 'all_dbs' && val !== '';
-                                if (needsDb && grantDbs.length === 0) {
+                                setGrantSpecific('');
+                                if (val !== 'all_dbs' && val !== '' && grantDbs.length === 0) {
                                   loadGrantDbs(grantCatalog);
-                                }
-                                if ((val === 'specific_table' || val === 'specific_view' || val === 'specific_mv') && grantDb) {
-                                  loadGrantTables(grantCatalog, grantDb);
                                 }
                               }}
                               placeholder="请选择范围..."
                               options={[
-                                { label: '数据库内所有表', value: 'all_tables' },
-                                { label: '数据库内所有视图', value: 'all_views' },
-                                { label: '数据库内所有物化视图', value: 'all_mvs' },
-                                { label: '数据库级别', value: 'database' },
                                 { label: '所有数据库', value: 'all_dbs' },
-                                { label: '指定表', value: 'specific_table' },
-                                { label: '指定视图', value: 'specific_view' },
-                                { label: '指定物化视图', value: 'specific_mv' },
+                                { label: '指定数据库', value: 'database' },
+                                { label: '库内全部对象', value: 'all_in_db' },
+                                { label: '指定对象', value: 'specific' },
                               ]}
                             />
                           </div>
+                          {(grantScope === 'all_in_db' || grantScope === 'specific') && (
+                            <div className="cascade-col">
+                              <label>对象类型</label>
+                              <SearchableSelect
+                                value={grantObjType}
+                                onChange={setGrantObjType}
+                                placeholder="选择类型"
+                                options={[
+                                  { label: '表', value: 'table' },
+                                  { label: '视图', value: 'view' },
+                                  { label: '物化视图', value: 'mv' },
+                                ]}
+                              />
+                            </div>
+                          )}
                           {grantScope !== 'all_dbs' && grantScope !== '' && (
                             <div className="cascade-col">
                               <label>Database</label>
@@ -978,7 +977,8 @@ export default function UsersPage() {
                                 value={grantDb}
                                 onChange={val => {
                                   setGrantDb(val);
-                                  if (grantScope === 'specific_table' || grantScope === 'specific_view' || grantScope === 'specific_mv') {
+                                  setGrantSpecific('');
+                                  if (grantScope === 'specific') {
                                     loadGrantTables(grantCatalog, val);
                                   }
                                 }}
@@ -987,13 +987,13 @@ export default function UsersPage() {
                               />
                             </div>
                           )}
-                          {(grantScope === 'specific_table' || grantScope === 'specific_view' || grantScope === 'specific_mv') && (
+                          {grantScope === 'specific' && (
                             <div className="cascade-col">
-                              <label>{grantScope === 'specific_table' ? '表名' : grantScope === 'specific_view' ? '视图名' : 'MV名'}</label>
+                              <label>{grantObjType === 'table' ? '表名' : grantObjType === 'view' ? '视图名' : 'MV名'}</label>
                               <SearchableSelect
                                 value={grantSpecific}
                                 onChange={setGrantSpecific}
-                                placeholder={grantScope === 'specific_table' ? '搜索表名...' : grantScope === 'specific_view' ? '搜索视图...' : '搜索 MV...'}
+                                placeholder={grantObjType === 'table' ? '搜索表名...' : grantObjType === 'view' ? '搜索视图...' : '搜索 MV...'}
                                 searchPlaceholder="输入关键字搜索..."
                                 options={grantTables.map(t => ({ label: t, value: t }))}
                               />
