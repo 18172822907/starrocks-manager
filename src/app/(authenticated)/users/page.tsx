@@ -5,6 +5,7 @@ import { useSession } from '@/hooks/useSession';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/ui';
 import PrivilegeDetailModal, { CatalogSectionBlock } from '@/components/PrivilegeDetailModal';
+import SearchableSelect from '@/components/SearchableSelect';
 import { classifyGrants, type CatalogGrant } from '@/utils/grantClassifier';
 import {
   Users, Plus, Trash2, RefreshCw, Search, X,
@@ -869,18 +870,25 @@ export default function UsersPage() {
                         <>
                           <div className="cascade-col">
                             <label>范围</label>
-                            <select value={grantScope} onChange={e => setGrantScope(e.target.value)}>
-                              <option value="">请选择范围...</option>
-                              <option value="catalog">指定 Catalog</option>
-                              <option value="all_catalogs">所有 Catalogs</option>
-                            </select>
+                            <SearchableSelect
+                              value={grantScope}
+                              onChange={setGrantScope}
+                              placeholder="请选择范围..."
+                              options={[
+                                { label: '指定 Catalog', value: 'catalog' },
+                                { label: '所有 Catalogs', value: 'all_catalogs' },
+                              ]}
+                            />
                           </div>
                           {grantScope === 'catalog' && (
                             <div className="cascade-col">
                               <label>Catalog</label>
-                              <select value={grantCatalog} onChange={e => setGrantCatalog(e.target.value)}>
-                                {grantCatalogs.map(c => <option key={c} value={c}>{c}</option>)}
-                              </select>
+                              <SearchableSelect
+                                value={grantCatalog}
+                                onChange={setGrantCatalog}
+                                placeholder="选择 Catalog"
+                                options={grantCatalogs.map(c => ({ label: c, value: c }))}
+                              />
                             </div>
                           )}
                         </>
@@ -888,19 +896,26 @@ export default function UsersPage() {
                         <>
                           <div className="cascade-col">
                             <label>范围</label>
-                            <select value={grantScope} onChange={e => setGrantScope(e.target.value)}>
-                              <option value="">请选择范围...</option>
-                              <option value="all_global">所有全局函数</option>
-                              <option value="all_in_db">指定数据库内全部函数</option>
-                              <option value="specific">指定函数</option>
-                            </select>
+                            <SearchableSelect
+                              value={grantScope}
+                              onChange={setGrantScope}
+                              placeholder="请选择范围..."
+                              options={[
+                                { label: '所有全局函数', value: 'all_global' },
+                                { label: '指定数据库内全部函数', value: 'all_in_db' },
+                                { label: '指定函数', value: 'specific' },
+                              ]}
+                            />
                           </div>
                           {grantScope === 'all_in_db' && (
                             <div className="cascade-col">
                               <label>Database</label>
-                              <select value={grantDb} onChange={e => setGrantDb(e.target.value)}>
-                                {grantDbs.map(d => <option key={d} value={d}>{d}</option>)}
-                              </select>
+                              <SearchableSelect
+                                value={grantDb}
+                                onChange={setGrantDb}
+                                placeholder="选择数据库"
+                                options={grantDbs.map(d => ({ label: d, value: d }))}
+                              />
                             </div>
                           )}
                           {grantScope === 'specific' && (
@@ -915,58 +930,67 @@ export default function UsersPage() {
                         <>
                           <div className="cascade-col">
                             <label>Catalog</label>
-                            <select value={grantCatalog} onChange={e => {
-                              setGrantCatalog(e.target.value);
-                              loadGrantDbs(e.target.value);
-                              setGrantTables([]);
-                              setGrantSpecific('');
-                            }}>
-                              {grantCatalogs.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
+                            <SearchableSelect
+                              value={grantCatalog}
+                              onChange={val => {
+                                setGrantCatalog(val);
+                                loadGrantDbs(val);
+                                setGrantTables([]);
+                                setGrantSpecific('');
+                              }}
+                              placeholder="选择 Catalog"
+                              options={grantCatalogs.map(c => ({ label: c, value: c }))}
+                            />
                           </div>
                           <div className="cascade-col">
                             <label>范围</label>
-                            <select value={grantScope} onChange={e => {
-                              setGrantScope(e.target.value);
-                              if ((e.target.value === 'specific_table' || e.target.value === 'specific_view' || e.target.value === 'specific_mv') && grantDb) {
-                                loadGrantTables(grantCatalog, grantDb);
-                              }
-                            }}>
-                              <option value="">请选择范围...</option>
-                              <option value="all_tables">数据库内所有表</option>
-                              <option value="all_views">数据库内所有视图</option>
-                              <option value="all_mvs">数据库内所有物化视图</option>
-                              <option value="database">数据库级别</option>
-                              <option value="all_dbs">所有数据库</option>
-                              <option value="specific_table">指定表</option>
-                              <option value="specific_view">指定视图</option>
-                              <option value="specific_mv">指定物化视图</option>
-                            </select>
+                            <SearchableSelect
+                              value={grantScope}
+                              onChange={val => {
+                                setGrantScope(val);
+                                if ((val === 'specific_table' || val === 'specific_view' || val === 'specific_mv') && grantDb) {
+                                  loadGrantTables(grantCatalog, grantDb);
+                                }
+                              }}
+                              placeholder="请选择范围..."
+                              options={[
+                                { label: '数据库内所有表', value: 'all_tables' },
+                                { label: '数据库内所有视图', value: 'all_views' },
+                                { label: '数据库内所有物化视图', value: 'all_mvs' },
+                                { label: '数据库级别', value: 'database' },
+                                { label: '所有数据库', value: 'all_dbs' },
+                                { label: '指定表', value: 'specific_table' },
+                                { label: '指定视图', value: 'specific_view' },
+                                { label: '指定物化视图', value: 'specific_mv' },
+                              ]}
+                            />
                           </div>
-                          {grantScope !== 'all_dbs' && (
+                          {grantScope !== 'all_dbs' && grantScope !== '' && (
                             <div className="cascade-col">
                               <label>Database</label>
-                              <select value={grantDb} onChange={e => {
-                                setGrantDb(e.target.value);
-                                if (grantScope === 'specific_table' || grantScope === 'specific_view' || grantScope === 'specific_mv') {
-                                  loadGrantTables(grantCatalog, e.target.value);
-                                }
-                              }}>
-                                {grantDbs.map(d => <option key={d} value={d}>{d}</option>)}
-                              </select>
+                              <SearchableSelect
+                                value={grantDb}
+                                onChange={val => {
+                                  setGrantDb(val);
+                                  if (grantScope === 'specific_table' || grantScope === 'specific_view' || grantScope === 'specific_mv') {
+                                    loadGrantTables(grantCatalog, val);
+                                  }
+                                }}
+                                placeholder="选择数据库"
+                                options={grantDbs.map(d => ({ label: d, value: d }))}
+                              />
                             </div>
                           )}
                           {(grantScope === 'specific_table' || grantScope === 'specific_view' || grantScope === 'specific_mv') && (
                             <div className="cascade-col">
                               <label>{grantScope === 'specific_table' ? '表名' : grantScope === 'specific_view' ? '视图名' : 'MV名'}</label>
-                              {grantTables.length > 0 ? (
-                                <select value={grantSpecific} onChange={e => setGrantSpecific(e.target.value)}>
-                                  <option value="">请选择...</option>
-                                  {grantTables.map(t => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                              ) : (
-                                <input value={grantSpecific} onChange={e => setGrantSpecific(e.target.value)} placeholder={grantScope === 'specific_table' ? 'table_name' : 'mv_name'} />
-                              )}
+                              <SearchableSelect
+                                value={grantSpecific}
+                                onChange={setGrantSpecific}
+                                placeholder={grantScope === 'specific_table' ? '搜索表名...' : grantScope === 'specific_view' ? '搜索视图...' : '搜索 MV...'}
+                                searchPlaceholder="输入关键字搜索..."
+                                options={grantTables.map(t => ({ label: t, value: t }))}
+                              />
                             </div>
                           )}
                         </>
