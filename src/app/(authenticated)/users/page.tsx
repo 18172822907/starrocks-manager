@@ -68,6 +68,8 @@ export default function UsersPage() {
   const [grantCatalogs, setGrantCatalogs] = useState<string[]>([]);
   const [grantDbs, setGrantDbs] = useState<string[]>([]);
   const [grantSubmitting, setGrantSubmitting] = useState(false);
+  const [grantExisting, setGrantExisting] = useState<import('@/utils/grantClassifier').CatalogGroup[]>([]);
+  const [grantExistingOpen, setGrantExistingOpen] = useState(false);
   // Role assignment modal - Transfer List
   const [showRoleAssign, setShowRoleAssign] = useState<string | null>(null);
   const [allRoles, setAllRoles] = useState<string[]>([]);
@@ -251,18 +253,26 @@ export default function UsersPage() {
     setGrantScope('all_tables');
     setGrantSpecific('');
     setGrantSubmitting(false);
-    // Load catalogs
+    setGrantExisting([]);
+    setGrantExistingOpen(false);
+    // Load catalogs + existing privileges
     if (session) {
       try {
-        const res = await fetch(`/api/catalogs?sessionId=${encodeURIComponent(session.sessionId)}`);
-        const data = await res.json();
-        if (data.catalogs) {
-          const names = data.catalogs.map((c: Record<string, unknown>) =>
+        const [catRes, grantRes] = await Promise.all([
+          fetch(`/api/catalogs?sessionId=${encodeURIComponent(session.sessionId)}`),
+          fetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(identity)}`),
+        ]);
+        const catData = await catRes.json();
+        if (catData.catalogs) {
+          const names = catData.catalogs.map((c: Record<string, unknown>) =>
             String(c['CatalogName'] || c['Catalog'] || Object.values(c)[0])
           );
           setGrantCatalogs(names);
-          // Load dbs for default_catalog
           loadGrantDbs('default_catalog');
+        }
+        const grantData = await grantRes.json();
+        if (grantData.grants) {
+          setGrantExisting(classifyGrants(grantData.grants, grantData.catalogGrants));
         }
       } catch { /* ignore */ }
     }
@@ -758,7 +768,7 @@ export default function UsersPage() {
                 <div className="modal-title">权限授予 — {showGrant}</div>
                 <button className="btn-ghost btn-icon" onClick={() => setShowGrant(null)}><X size={18} /></button>
               </div>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '70vh', overflowY: 'auto' }}>
                 {/* Step 1: Category */}
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginBottom: '6px', fontWeight: 600 }}>① 权限类型</div>
@@ -900,6 +910,31 @@ export default function UsersPage() {
                         </>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {/* Existing Privileges */}
+                {grantExisting.length > 0 && (
+                  <div style={{ border: '1px solid var(--border-secondary)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                    <button
+                      onClick={() => setGrantExistingOpen(!grantExistingOpen)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: '6px',
+                        padding: '7px 12px', background: 'var(--bg-tertiary)', border: 'none',
+                        cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)',
+                      }}
+                    >
+                      <Eye size={13} style={{ color: 'var(--primary-500)' }} />
+                      已有权限（{grantExisting.reduce((s, g) => s + g.totalCount, 0)} 项）
+                      <ChevronDown size={14} style={{ marginLeft: 'auto', transform: grantExistingOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                    </button>
+                    {grantExistingOpen && (
+                      <div style={{ maxHeight: '180px', overflowY: 'auto', padding: '8px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {grantExisting.map((cg, i) => <CatalogSectionBlock key={i} group={cg} />)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
