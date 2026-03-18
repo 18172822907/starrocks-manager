@@ -65,7 +65,7 @@ export default function UsersPage() {
   const [grantCatalog, setGrantCatalog] = useState('default_catalog');
   const [grantDb, setGrantDb] = useState('');
   const [grantScope, setGrantScope] = useState(''); // database | object
-  const [grantObjType, setGrantObjType] = useState('table'); // table | view | mv
+  const [grantObjType, setGrantObjType] = useState('all_table'); // all_table | specific_table | all_view | ...
   const [grantAllObjects, setGrantAllObjects] = useState(true); // true=all objects, false=specific
   const [grantSpecific, setGrantSpecific] = useState('');
   const [grantDbMulti, setGrantDbMulti] = useState<Set<string>>(new Set()); // multi-select DBs
@@ -393,14 +393,14 @@ export default function UsersPage() {
     }
     if (grantScope === 'object') {
       if (!grantDb) return '';
-      if (grantAllObjects) {
-        const objMap: Record<string, string> = { table: 'ALL TABLES', view: 'ALL VIEWS', mv: 'ALL MATERIALIZED VIEWS' };
-        return `${action} ${privStr} ON ${objMap[grantObjType] || 'ALL TABLES'} IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
+      if (grantObjType.startsWith('all_')) {
+        const typeMap: Record<string, string> = { all_table: 'ALL TABLES', all_view: 'ALL VIEWS', all_mv: 'ALL MATERIALIZED VIEWS' };
+        return `${action} ${privStr} ON ${typeMap[grantObjType] || 'ALL TABLES'} IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
       } else {
-        const objMap: Record<string, string> = { table: 'TABLE', view: 'VIEW', mv: 'MATERIALIZED VIEW' };
+        const typeMap: Record<string, string> = { specific_table: 'TABLE', specific_view: 'VIEW', specific_mv: 'MATERIALIZED VIEW' };
         const items = Array.from(grantSpecificMulti);
         if (items.length === 0) return '';
-        return items.map(item => `${action} ${privStr} ON ${objMap[grantObjType] || 'TABLE'} ${grantDb}.${item} ${toFrom} ${showGrant}`).join(';\n');
+        return items.map(item => `${action} ${privStr} ON ${typeMap[grantObjType] || 'TABLE'} ${grantDb}.${item} ${toFrom} ${showGrant}`).join(';\n');
       }
     }
     return '';
@@ -1003,8 +1003,10 @@ export default function UsersPage() {
                                   onChange={val => {
                                     setGrantDb(val);
                                     setGrantSpecificMulti(new Set());
-                                    if (!grantAllObjects) {
-                                      loadGrantTables(grantCatalog, val, grantObjType);
+                                    setGrantTables([]);
+                                    if (grantObjType.startsWith('specific_') && val) {
+                                      const t = grantObjType.replace('specific_', '');
+                                      loadGrantTables(grantCatalog, val, t);
                                     }
                                   }}
                                   placeholder="选择数据库"
@@ -1012,54 +1014,42 @@ export default function UsersPage() {
                                 />
                               </div>
                               <div className="cascade-col">
-                                <label>对象类型</label>
+                                <label>对象范围</label>
                                 <SearchableSelect
                                   value={grantObjType}
                                   onChange={val => {
                                     setGrantObjType(val);
                                     setGrantSpecificMulti(new Set());
                                     setGrantTables([]);
-                                    if (!grantAllObjects && grantDb) {
-                                      loadGrantTables(grantCatalog, grantDb, val);
+                                    if (val.startsWith('specific_') && grantDb) {
+                                      const t = val.replace('specific_', '');
+                                      loadGrantTables(grantCatalog, grantDb, t);
                                     }
                                   }}
-                                  placeholder="选择类型"
+                                  placeholder="选择对象范围"
                                   options={[
-                                    { label: '表', value: 'table' },
-                                    { label: '视图', value: 'view' },
-                                    { label: '物化视图', value: 'mv' },
+                                    { label: '全部表', value: 'all_table' },
+                                    { label: '指定表', value: 'specific_table' },
+                                    { label: '全部视图', value: 'all_view' },
+                                    { label: '指定视图', value: 'specific_view' },
+                                    { label: '全部物化视图', value: 'all_mv' },
+                                    { label: '指定物化视图', value: 'specific_mv' },
                                   ]}
                                 />
                               </div>
-                              <div className="cascade-col">
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <span>范围</span>
-                                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 400, cursor: 'pointer' }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={grantAllObjects}
-                                      onChange={e => {
-                                        setGrantAllObjects(e.target.checked);
-                                        setGrantSpecificMulti(new Set());
-                                        if (!e.target.checked && grantDb) {
-                                          loadGrantTables(grantCatalog, grantDb, grantObjType);
-                                        }
-                                      }}
-                                    />
-                                    全部{grantObjType === 'table' ? '表' : grantObjType === 'view' ? '视图' : '物化视图'}
-                                  </label>
-                                </label>
-                                {!grantAllObjects && (
+                              {grantObjType.startsWith('specific_') && (
+                                <div className="cascade-col">
+                                  <label>{grantObjType === 'specific_table' ? '表名' : grantObjType === 'specific_view' ? '视图名' : 'MV名'}（可多选）</label>
                                   <SearchableSelect
                                     multiple
                                     multiValue={grantSpecificMulti}
                                     onMultiChange={setGrantSpecificMulti}
-                                    placeholder={grantObjType === 'table' ? '搜索表名...' : grantObjType === 'view' ? '搜索视图...' : '搜索 MV...'}
+                                    placeholder={grantObjType === 'specific_table' ? '搜索表名...' : grantObjType === 'specific_view' ? '搜索视图...' : '搜索 MV...'}
                                     searchPlaceholder="输入关键字搜索..."
                                     options={grantTables.map(t => ({ label: t, value: t }))}
                                   />
-                                )}
-                              </div>
+                                </div>
+                              )}
                             </>
                           )}
                         </>
