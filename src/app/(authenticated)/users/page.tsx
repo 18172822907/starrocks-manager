@@ -272,6 +272,12 @@ export default function UsersPage() {
           const names = catData.catalogs.map((c: Record<string, unknown>) =>
             String(c['CatalogName'] || c['Catalog'] || Object.values(c)[0])
           );
+          // Sort: default_catalog first, then alphabetically
+          names.sort((a: string, b: string) => {
+            if (a === 'default_catalog') return -1;
+            if (b === 'default_catalog') return 1;
+            return a.localeCompare(b);
+          });
           setGrantCatalogs(names);
           loadGrantDbs('default_catalog');
         }
@@ -364,6 +370,9 @@ export default function UsersPage() {
     if (grantScope === 'all_tables') {
       return `${action} ${privStr} ON ALL TABLES IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
     }
+    if (grantScope === 'all_views') {
+      return `${action} ${privStr} ON ALL VIEWS IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
+    }
     if (grantScope === 'all_mvs') {
       return `${action} ${privStr} ON ALL MATERIALIZED VIEWS IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
     }
@@ -372,6 +381,9 @@ export default function UsersPage() {
     }
     if (grantScope === 'specific_table') {
       return `${action} ${privStr} ON TABLE ${grantDb}.${grantSpecific || '...'} ${toFrom} ${showGrant}`;
+    }
+    if (grantScope === 'specific_view') {
+      return `${action} ${privStr} ON VIEW ${grantDb}.${grantSpecific || '...'} ${toFrom} ${showGrant}`;
     }
     if (grantScope === 'specific_mv') {
       return `${action} ${privStr} ON MATERIALIZED VIEW ${grantDb}.${grantSpecific || '...'} ${toFrom} ${showGrant}`;
@@ -858,8 +870,9 @@ export default function UsersPage() {
                           <div className="cascade-col">
                             <label>范围</label>
                             <select value={grantScope} onChange={e => setGrantScope(e.target.value)}>
+                              <option value="">请选择范围...</option>
                               <option value="catalog">指定 Catalog</option>
-                              <option value="all_catalogs">ALL CATALOGS</option>
+                              <option value="all_catalogs">所有 Catalogs</option>
                             </select>
                           </div>
                           {grantScope === 'catalog' && (
@@ -876,7 +889,8 @@ export default function UsersPage() {
                           <div className="cascade-col">
                             <label>范围</label>
                             <select value={grantScope} onChange={e => setGrantScope(e.target.value)}>
-                              <option value="all_global">ALL GLOBAL FUNCTIONS</option>
+                              <option value="">请选择范围...</option>
+                              <option value="all_global">所有全局函数</option>
                               <option value="all_in_db">指定数据库内全部函数</option>
                               <option value="specific">指定函数</option>
                             </select>
@@ -914,15 +928,18 @@ export default function UsersPage() {
                             <label>范围</label>
                             <select value={grantScope} onChange={e => {
                               setGrantScope(e.target.value);
-                              if ((e.target.value === 'specific_table' || e.target.value === 'specific_mv') && grantDb) {
+                              if ((e.target.value === 'specific_table' || e.target.value === 'specific_view' || e.target.value === 'specific_mv') && grantDb) {
                                 loadGrantTables(grantCatalog, grantDb);
                               }
                             }}>
-                              <option value="all_tables">ALL TABLES IN DATABASE</option>
-                              <option value="all_mvs">ALL MVs IN DATABASE</option>
-                              <option value="database">DATABASE 级别</option>
-                              <option value="all_dbs">ALL DATABASES</option>
+                              <option value="">请选择范围...</option>
+                              <option value="all_tables">数据库内所有表</option>
+                              <option value="all_views">数据库内所有视图</option>
+                              <option value="all_mvs">数据库内所有物化视图</option>
+                              <option value="database">数据库级别</option>
+                              <option value="all_dbs">所有数据库</option>
                               <option value="specific_table">指定表</option>
+                              <option value="specific_view">指定视图</option>
                               <option value="specific_mv">指定物化视图</option>
                             </select>
                           </div>
@@ -931,7 +948,7 @@ export default function UsersPage() {
                               <label>Database</label>
                               <select value={grantDb} onChange={e => {
                                 setGrantDb(e.target.value);
-                                if (grantScope === 'specific_table' || grantScope === 'specific_mv') {
+                                if (grantScope === 'specific_table' || grantScope === 'specific_view' || grantScope === 'specific_mv') {
                                   loadGrantTables(grantCatalog, e.target.value);
                                 }
                               }}>
@@ -939,9 +956,9 @@ export default function UsersPage() {
                               </select>
                             </div>
                           )}
-                          {(grantScope === 'specific_table' || grantScope === 'specific_mv') && (
+                          {(grantScope === 'specific_table' || grantScope === 'specific_view' || grantScope === 'specific_mv') && (
                             <div className="cascade-col">
-                              <label>{grantScope === 'specific_table' ? '表名' : 'MV名'}</label>
+                              <label>{grantScope === 'specific_table' ? '表名' : grantScope === 'specific_view' ? '视图名' : 'MV名'}</label>
                               {grantTables.length > 0 ? (
                                 <select value={grantSpecific} onChange={e => setGrantSpecific(e.target.value)}>
                                   <option value="">请选择...</option>
