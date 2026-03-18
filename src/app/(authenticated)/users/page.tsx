@@ -60,16 +60,20 @@ export default function UsersPage() {
   const [showGrant, setShowGrant] = useState<string | null>(null);
   type PrivCategory = 'system' | 'ddl' | 'dml' | 'function' | 'catalog';
   const [grantCategory, setGrantCategory] = useState<PrivCategory>('dml');
-  const [grantPrivs, setGrantPrivs] = useState<Set<string>>(new Set(['SELECT']));
+  const [grantPrivs, setGrantPrivs] = useState<Set<string>>(new Set());
   const [grantCatalog, setGrantCatalog] = useState('default_catalog');
   const [grantDb, setGrantDb] = useState('');
-  const [grantScope, setGrantScope] = useState('all_tables'); // all_tables | all_dbs | all_mvs | specific_table | specific_mv
+  const [grantScope, setGrantScope] = useState('');
   const [grantSpecific, setGrantSpecific] = useState('');
   const [grantCatalogs, setGrantCatalogs] = useState<string[]>([]);
   const [grantDbs, setGrantDbs] = useState<string[]>([]);
+  const [grantTables, setGrantTables] = useState<string[]>([]);
   const [grantSubmitting, setGrantSubmitting] = useState(false);
   const [grantExisting, setGrantExisting] = useState<import('@/utils/grantClassifier').CatalogGroup[]>([]);
   const [grantExistingOpen, setGrantExistingOpen] = useState(false);
+  // 10-min client-side metadata cache
+  const metaCacheRef = React.useRef<Map<string, { data: string[]; ts: number }>>(new Map());
+  const META_TTL = 10 * 60 * 1000; // 10 minutes
   // Role assignment modal - Transfer List
   const [showRoleAssign, setShowRoleAssign] = useState<string | null>(null);
   const [allRoles, setAllRoles] = useState<string[]>([]);
@@ -248,14 +252,15 @@ export default function UsersPage() {
     setShowGrant(identity);
     setGrantCategory('dml');
     setGrantPrivs(new Set());
-    setGrantCatalog('');
+    setGrantCatalog('default_catalog');
     setGrantDb('');
     setGrantScope('');
     setGrantSpecific('');
     setGrantSubmitting(false);
     setGrantExisting([]);
     setGrantExistingOpen(false);
-    // Load catalogs + existing privileges
+    setGrantTables([]);
+    // Load catalogs + existing privileges + default_catalog databases
     if (session) {
       try {
         const [catRes, grantRes] = await Promise.all([
@@ -280,15 +285,17 @@ export default function UsersPage() {
 
   async function loadGrantDbs(catalog: string) {
     if (!session) return;
+    const cacheKey = `dbs:${catalog}`;
+    const cached = metaCacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.ts < META_TTL) {
+      setGrantDbs(cached.data);
+      if (cached.data.length > 0) setGrantDb(cached.data[0]);
+      return;
+    }
     try {
-      // Switch catalog context then show databases
-      await fetch(`/api/query`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.sessionId, sql: `SET CATALOG \`${catalog}\`` }),
-      });
       const res = await fetch(`/api/query`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.sessionId, sql: 'SHOW DATABASES' }),
+        body: JSON.stringify({ sessionId: session.sessionId, sql: `SHOW DATABASES FROM \`${catalog}\`` }),
       });
       const data = await res.json();
       if (data.rows) {
@@ -297,13 +304,31 @@ export default function UsersPage() {
         );
         setGrantDbs(names);
         if (names.length > 0) setGrantDb(names[0]);
+        metaCacheRef.current.set(cacheKey, { data: names, ts: Date.now() });
       }
-      // Switch back to default
-      if (catalog !== 'default_catalog') {
-        await fetch(`/api/query`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: session.sessionId, sql: 'SET CATALOG default_catalog' }),
-        });
+    } catch { /* ignore */ }
+  }
+
+  async function loadGrantTables(catalog: string, db: string) {
+    if (!session || !db) return;
+    const cacheKey = `tables:${catalog}.${db}`;
+    const cached = metaCacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.ts < META_TTL) {
+      setGrantTables(cached.data);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/query`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.sessionId, sql: `SHOW TABLES FROM \`${catalog}\`.\`${db}\`` }),
+      });
+      const data = await res.json();
+      if (data.rows) {
+        const names = data.rows.map((r: Record<string, unknown>) =>
+          String(Object.values(r)[0])
+        );
+        setGrantTables(names);
+        metaCacheRef.current.set(cacheKey, { data: names, ts: Date.now() });
       }
     } catch { /* ignore */ }
   }
@@ -879,13 +904,20 @@ export default function UsersPage() {
                             <select value={grantCatalog} onChange={e => {
                               setGrantCatalog(e.target.value);
                               loadGrantDbs(e.target.value);
+                              setGrantTables([]);
+                              setGrantSpecific('');
                             }}>
                               {grantCatalogs.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                           </div>
                           <div className="cascade-col">
                             <label>范围</label>
-                            <select value={grantScope} onChange={e => setGrantScope(e.target.value)}>
+                            <select value={grantScope} onChange={e => {
+                              setGrantScope(e.target.value);
+                              if ((e.target.value === 'specific_table' || e.target.value === 'specific_mv') && grantDb) {
+                                loadGrantTables(grantCatalog, grantDb);
+                              }
+                            }}>
                               <option value="all_tables">ALL TABLES IN DATABASE</option>
                               <option value="all_mvs">ALL MVs IN DATABASE</option>
                               <option value="database">DATABASE 级别</option>
@@ -897,7 +929,12 @@ export default function UsersPage() {
                           {grantScope !== 'all_dbs' && (
                             <div className="cascade-col">
                               <label>Database</label>
-                              <select value={grantDb} onChange={e => setGrantDb(e.target.value)}>
+                              <select value={grantDb} onChange={e => {
+                                setGrantDb(e.target.value);
+                                if (grantScope === 'specific_table' || grantScope === 'specific_mv') {
+                                  loadGrantTables(grantCatalog, e.target.value);
+                                }
+                              }}>
                                 {grantDbs.map(d => <option key={d} value={d}>{d}</option>)}
                               </select>
                             </div>
@@ -905,7 +942,14 @@ export default function UsersPage() {
                           {(grantScope === 'specific_table' || grantScope === 'specific_mv') && (
                             <div className="cascade-col">
                               <label>{grantScope === 'specific_table' ? '表名' : 'MV名'}</label>
-                              <input value={grantSpecific} onChange={e => setGrantSpecific(e.target.value)} placeholder={grantScope === 'specific_table' ? 'table_name' : 'mv_name'} />
+                              {grantTables.length > 0 ? (
+                                <select value={grantSpecific} onChange={e => setGrantSpecific(e.target.value)}>
+                                  <option value="">请选择...</option>
+                                  {grantTables.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                              ) : (
+                                <input value={grantSpecific} onChange={e => setGrantSpecific(e.target.value)} placeholder={grantScope === 'specific_table' ? 'table_name' : 'mv_name'} />
+                              )}
                             </div>
                           )}
                         </>
