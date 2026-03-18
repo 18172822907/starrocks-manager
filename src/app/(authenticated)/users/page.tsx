@@ -64,7 +64,7 @@ export default function UsersPage() {
   const [grantPrivs, setGrantPrivs] = useState<Set<string>>(new Set());
   const [grantCatalog, setGrantCatalog] = useState('default_catalog');
   const [grantDb, setGrantDb] = useState('');
-  const [grantScope, setGrantScope] = useState(''); // database | object
+  const [grantScope, setGrantScope] = useState('database'); // database | object
   const [grantObjType, setGrantObjType] = useState('all_table'); // all_table | specific_table | all_view | ...
   const [grantAllObjects, setGrantAllObjects] = useState(true); // true=all objects, false=specific
   const [grantSpecific, setGrantSpecific] = useState('');
