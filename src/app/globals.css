@@ -1426,3 +1426,94 @@ select.input option:checked {
   background: var(--bg-tertiary);
   flex-shrink: 0;
 }
+
+/* ── Privilege Type Cards ────────────────────────────── */
+.priv-type-cards {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.priv-type-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-secondary);
+  background: var(--bg-primary);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: all 0.15s;
+  user-select: none;
+}
+.priv-type-card:hover {
+  border-color: var(--primary-300);
+  background: var(--bg-secondary);
+}
+.priv-type-card.active {
+  border-color: var(--card-border, var(--primary-500));
+  background: var(--card-bg, rgba(59,130,246,0.06));
+  box-shadow: 0 0 0 1px var(--card-border, var(--primary-500)) inset;
+}
+.priv-type-card .priv-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Privilege Checkbox Grid ─────────────────────────── */
+.priv-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 6px 0;
+}
+.priv-check-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  transition: background 0.12s;
+  user-select: none;
+}
+.priv-check-item:hover {
+  background: var(--bg-secondary);
+}
+
+/* ── Cascade Selectors ───────────────────────────────── */
+.cascade-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.cascade-row .cascade-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 120px;
+}
+.cascade-row .cascade-col label {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.cascade-row .cascade-col select,
+.cascade-row .cascade-col input {
+  font-size: 0.8rem;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}

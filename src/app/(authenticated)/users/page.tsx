@@ -9,7 +9,7 @@ import { classifyGrants, type CatalogGrant } from '@/utils/grantClassifier';
 import {
   Users, Plus, Trash2, RefreshCw, Search, X,
   ChevronUp, ChevronDown, ChevronsUpDown, Clock, Key, ShieldCheck, ChevronRight, ChevronLeft,
-  Shield, UserPlus, Eye,
+  Shield, ShieldOff, UserPlus, Eye, Wrench, Database, Code, FolderOpen,
 } from 'lucide-react';
 
 const SYSTEM_ROLES = new Set(['root', 'cluster_admin', 'db_admin', 'user_admin', 'public']);
@@ -56,12 +56,18 @@ export default function UsersPage() {
   // Privilege detail modal
   const [showPrivDetail, setShowPrivDetail] = useState<{ identity: string; grants: string[]; catalogGrants?: { grant: string; catalog: string }[] } | null>(null);
 
-  // Grant privilege modal
-  const [showGrant, setShowGrant] = useState<string | null>(null); // user identity
-  const [grantAction, setGrantAction] = useState<'grant_privilege' | 'revoke_privilege'>('grant_privilege');
-  const [grantPriv, setGrantPriv] = useState('SELECT');
-  const [grantObjType, setGrantObjType] = useState('TABLE');
-  const [grantObjName, setGrantObjName] = useState('');
+  // Grant privilege modal - wizard state
+  const [showGrant, setShowGrant] = useState<string | null>(null);
+  type PrivCategory = 'system' | 'ddl' | 'dml' | 'function' | 'catalog';
+  const [grantCategory, setGrantCategory] = useState<PrivCategory>('dml');
+  const [grantPrivs, setGrantPrivs] = useState<Set<string>>(new Set(['SELECT']));
+  const [grantCatalog, setGrantCatalog] = useState('default_catalog');
+  const [grantDb, setGrantDb] = useState('');
+  const [grantScope, setGrantScope] = useState('all_tables'); // all_tables | all_dbs | all_mvs | specific_table | specific_mv
+  const [grantSpecific, setGrantSpecific] = useState('');
+  const [grantCatalogs, setGrantCatalogs] = useState<string[]>([]);
+  const [grantDbs, setGrantDbs] = useState<string[]>([]);
+  const [grantSubmitting, setGrantSubmitting] = useState(false);
   // Role assignment modal - Transfer List
   const [showRoleAssign, setShowRoleAssign] = useState<string | null>(null);
   const [allRoles, setAllRoles] = useState<string[]>([]);
@@ -192,29 +198,171 @@ export default function UsersPage() {
 
   const SYSTEM_USERS = new Set(['root', 'starrocks']);
 
-  async function handleGrantPrivilege() {
-    if (!session || !showGrant || !grantObjName) return;
+  // ── Privilege category → available privileges ──
+  const PRIV_OPTIONS: Record<string, { label: string; value: string }[]> = {
+    system: [
+      { label: 'OPERATE', value: 'OPERATE' },
+      { label: 'NODE', value: 'NODE' },
+      { label: 'CREATE RESOURCE GROUP', value: 'CREATE RESOURCE GROUP' },
+    ],
+    ddl: [
+      { label: 'CREATE TABLE', value: 'CREATE TABLE' },
+      { label: 'CREATE VIEW', value: 'CREATE VIEW' },
+      { label: 'CREATE MV', value: 'CREATE MATERIALIZED VIEW' },
+      { label: 'CREATE DATABASE', value: 'CREATE DATABASE' },
+      { label: 'ALTER', value: 'ALTER' },
+      { label: 'DROP', value: 'DROP' },
+      { label: 'REFRESH', value: 'REFRESH' },
+    ],
+    dml: [
+      { label: 'SELECT', value: 'SELECT' },
+      { label: 'INSERT', value: 'INSERT' },
+      { label: 'UPDATE', value: 'UPDATE' },
+      { label: 'DELETE', value: 'DELETE' },
+      { label: 'EXPORT', value: 'EXPORT' },
+    ],
+    function: [
+      { label: 'USAGE', value: 'USAGE' },
+      { label: 'CREATE FUNCTION', value: 'CREATE FUNCTION' },
+      { label: 'DROP', value: 'DROP' },
+    ],
+    catalog: [
+      { label: 'USAGE', value: 'USAGE' },
+      { label: 'CREATE DATABASE', value: 'CREATE DATABASE' },
+      { label: 'DROP', value: 'DROP' },
+      { label: 'ALTER', value: 'ALTER' },
+    ],
+  };
+
+  const CATEGORY_META_UI: Record<string, { label: string; color: string; bg: string }> = {
+    system:   { label: '系统', color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)' },
+    ddl:      { label: 'DDL',  color: '#d97706', bg: 'rgba(234,179,8,0.08)' },
+    dml:      { label: 'DML',  color: '#16a34a', bg: 'rgba(22,163,74,0.08)' },
+    function: { label: '函数', color: '#0284c7', bg: 'rgba(2,132,199,0.08)' },
+    catalog:  { label: 'Catalog', color: '#2563eb', bg: 'rgba(37,99,235,0.08)' },
+  };
+
+  async function openGrantModal(identity: string) {
+    setShowGrant(identity);
+    setGrantCategory('dml');
+    setGrantPrivs(new Set(['SELECT']));
+    setGrantCatalog('default_catalog');
+    setGrantDb('');
+    setGrantScope('all_tables');
+    setGrantSpecific('');
+    setGrantSubmitting(false);
+    // Load catalogs
+    if (session) {
+      try {
+        const res = await fetch(`/api/catalogs?sessionId=${encodeURIComponent(session.sessionId)}`);
+        const data = await res.json();
+        if (data.catalogs) {
+          const names = data.catalogs.map((c: Record<string, unknown>) =>
+            String(c['CatalogName'] || c['Catalog'] || Object.values(c)[0])
+          );
+          setGrantCatalogs(names);
+          // Load dbs for default_catalog
+          loadGrantDbs('default_catalog');
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  async function loadGrantDbs(catalog: string) {
+    if (!session) return;
+    try {
+      // Switch catalog context then show databases
+      await fetch(`/api/query`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.sessionId, sql: `SET CATALOG \`${catalog}\`` }),
+      });
+      const res = await fetch(`/api/query`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.sessionId, sql: 'SHOW DATABASES' }),
+      });
+      const data = await res.json();
+      if (data.rows) {
+        const names = data.rows.map((r: Record<string, unknown>) =>
+          String(r['Database'] || Object.values(r)[0])
+        );
+        setGrantDbs(names);
+        if (names.length > 0) setGrantDb(names[0]);
+      }
+      // Switch back to default
+      if (catalog !== 'default_catalog') {
+        await fetch(`/api/query`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.sessionId, sql: 'SET CATALOG default_catalog' }),
+        });
+      }
+    } catch { /* ignore */ }
+  }
+
+  function buildGrantSQL(action: 'GRANT' | 'REVOKE'): string {
+    const privStr = Array.from(grantPrivs).join(', ');
+    if (!privStr) return '';
+    const toFrom = action === 'GRANT' ? 'TO' : 'FROM';
+
+    if (grantCategory === 'system') {
+      return `${action} ${privStr} ON SYSTEM ${toFrom} ${showGrant}`;
+    }
+    if (grantCategory === 'catalog') {
+      if (grantScope === 'all_catalogs') {
+        return `${action} ${privStr} ON ALL CATALOGS ${toFrom} ${showGrant}`;
+      }
+      return `${action} ${privStr} ON CATALOG ${grantCatalog} ${toFrom} ${showGrant}`;
+    }
+    if (grantCategory === 'function') {
+      if (grantScope === 'all_global') {
+        return `${action} ${privStr} ON ALL GLOBAL FUNCTIONS ${toFrom} ${showGrant}`;
+      }
+      if (grantScope === 'all_in_db') {
+        return `${action} ${privStr} ON ALL FUNCTIONS IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
+      }
+      return `${action} ${privStr} ON GLOBAL FUNCTION ${grantSpecific || '...'} ${toFrom} ${showGrant}`;
+    }
+    // DDL / DML
+    if (grantScope === 'all_dbs') {
+      return `${action} ${privStr} ON ALL DATABASES ${toFrom} ${showGrant}`;
+    }
+    if (grantScope === 'all_tables') {
+      return `${action} ${privStr} ON ALL TABLES IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
+    }
+    if (grantScope === 'all_mvs') {
+      return `${action} ${privStr} ON ALL MATERIALIZED VIEWS IN DATABASE ${grantDb} ${toFrom} ${showGrant}`;
+    }
+    if (grantScope === 'database') {
+      return `${action} ${privStr} ON DATABASE ${grantDb} ${toFrom} ${showGrant}`;
+    }
+    if (grantScope === 'specific_table') {
+      return `${action} ${privStr} ON TABLE ${grantDb}.${grantSpecific || '...'} ${toFrom} ${showGrant}`;
+    }
+    if (grantScope === 'specific_mv') {
+      return `${action} ${privStr} ON MATERIALIZED VIEW ${grantDb}.${grantSpecific || '...'} ${toFrom} ${showGrant}`;
+    }
+    return '';
+  }
+
+  async function handleGrantSubmit(action: 'GRANT' | 'REVOKE') {
+    if (!session || !showGrant) return;
+    const sql = buildGrantSQL(action);
+    if (!sql) return;
+    setGrantSubmitting(true);
     setError('');
     try {
-      const res = await fetch('/api/grants', {
+      const res = await fetch('/api/query', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: session.sessionId,
-          action: grantAction,
-          grantee: showGrant,
-          privilege: grantPriv,
-          objectType: grantObjType,
-          objectName: grantObjName,
-        }),
+        body: JSON.stringify({ sessionId: session.sessionId, sql }),
       });
       const data = await res.json();
       if (data.error) setError(data.error);
       else {
-        setSuccess(`${grantAction === 'grant_privilege' ? '授权' : '撤销'}成功`);
+        setSuccess(`${action === 'GRANT' ? '授权' : '撤销'}成功`);
         setShowGrant(null);
         fetchUsers(true);
       }
     } catch (err) { setError(String(err)); }
+    finally { setGrantSubmitting(false); }
   }
 
   async function handleRoleSubmit() {
@@ -488,7 +636,7 @@ export default function UsersPage() {
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
                           <button
                             disabled={isSystem}
-                            onClick={() => !isSystem && setShowGrant(u.identity)}
+                            onClick={() => !isSystem && openGrantModal(u.identity)}
                             title={isSystem ? '系统用户请通过命令行管理' : '授权'}
                             style={{
                               display: 'inline-flex', alignItems: 'center', gap: '4px',
@@ -602,75 +750,183 @@ export default function UsersPage() {
           </div>
         )}
 
-        {/* Grant Privilege Modal */}
+        {/* Grant Privilege Modal - Wizard */}
         {showGrant && (
           <div className="modal-overlay" onClick={() => setShowGrant(null)}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px' }}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '680px' }}>
               <div className="modal-header">
-                <div className="modal-title">授权 / 撤销权限 — {showGrant}</div>
+                <div className="modal-title">权限授予 — {showGrant}</div>
                 <button className="btn-ghost btn-icon" onClick={() => setShowGrant(null)}><X size={18} /></button>
               </div>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">操作</label>
-                  <select className="input" value={grantAction} onChange={e => setGrantAction(e.target.value as 'grant_privilege' | 'revoke_privilege')}>
-                    <option value="grant_privilege">授予 (GRANT)</option>
-                    <option value="revoke_privilege">撤销 (REVOKE)</option>
-                  </select>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">权限类型</label>
-                    <select className="input" value={grantPriv} onChange={e => setGrantPriv(e.target.value)}>
-                      <option value="ALL">ALL (全部)</option>
-                      <option value="SELECT">SELECT</option>
-                      <option value="INSERT">INSERT</option>
-                      <option value="UPDATE">UPDATE</option>
-                      <option value="DELETE">DELETE</option>
-                      <option value="ALTER">ALTER</option>
-                      <option value="DROP">DROP</option>
-                      <option value="CREATE TABLE">CREATE TABLE</option>
-                      <option value="CREATE VIEW">CREATE VIEW</option>
-                      <option value="CREATE MATERIALIZED VIEW">CREATE MV</option>
-                      <option value="USAGE">USAGE</option>
-                      <option value="IMPERSONATE">IMPERSONATE</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">对象类型</label>
-                    <select className="input" value={grantObjType} onChange={e => setGrantObjType(e.target.value)}>
-                      <option value="TABLE">TABLE</option>
-                      <option value="ALL TABLES IN DATABASE">ALL TABLES IN DATABASE</option>
-                      <option value="ALL TABLES IN ALL DATABASES">ALL TABLES IN ALL DATABASES</option>
-                      <option value="DATABASE">DATABASE</option>
-                      <option value="ALL DATABASES">ALL DATABASES</option>
-                      <option value="CATALOG">CATALOG</option>
-                      <option value="ALL CATALOGS">ALL CATALOGS</option>
-                      <option value="MATERIALIZED VIEW">MATERIALIZED VIEW</option>
-                      <option value="ALL MATERIALIZED VIEWS IN DATABASE">ALL MVs IN DATABASE</option>
-                      <option value="FUNCTION">FUNCTION</option>
-                      <option value="ALL FUNCTIONS IN DATABASE">ALL FUNCTIONS IN DATABASE</option>
-                      <option value="ALL GLOBAL FUNCTIONS">ALL GLOBAL FUNCTIONS</option>
-                      <option value="RESOURCE GROUP">RESOURCE GROUP</option>
-                    </select>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* Step 1: Category */}
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginBottom: '6px', fontWeight: 600 }}>① 权限类型</div>
+                  <div className="priv-type-cards">
+                    {(Object.keys(CATEGORY_META_UI) as Array<keyof typeof CATEGORY_META_UI>).map(cat => {
+                      const meta = CATEGORY_META_UI[cat];
+                      const active = grantCategory === cat;
+                      return (
+                        <div
+                          key={cat}
+                          className={`priv-type-card${active ? ' active' : ''}`}
+                          style={active ? { '--card-border': meta.color, '--card-bg': meta.bg } as React.CSSProperties : {}}
+                          onClick={() => {
+                            setGrantCategory(cat as PrivCategory);
+                            setGrantPrivs(new Set());
+                            // Reset scope
+                            if (cat === 'system') setGrantScope('system');
+                            else if (cat === 'catalog') setGrantScope('catalog');
+                            else if (cat === 'function') setGrantScope('all_global');
+                            else setGrantScope('all_tables');
+                          }}
+                        >
+                          <span className="priv-icon" style={{ backgroundColor: meta.bg, color: meta.color }}>
+                            {cat === 'system' ? <Shield size={14} /> : cat === 'ddl' ? <Wrench size={14} /> : cat === 'dml' ? <Database size={14} /> : cat === 'function' ? <Code size={14} /> : <FolderOpen size={14} />}
+                          </span>
+                          {meta.label}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">对象名 <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>（如 db.table 或 db_name，ALL 类型填空即可）</span></label>
-                  <input className="input" placeholder="database.table 或 database_name" value={grantObjName} onChange={e => setGrantObjName(e.target.value)} />
+
+                {/* Step 2: Privileges */}
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginBottom: '4px', fontWeight: 600 }}>② 具体权限</div>
+                  <div className="priv-checks">
+                    {(PRIV_OPTIONS[grantCategory] || []).map(opt => (
+                      <label key={opt.value} className="priv-check-item">
+                        <input
+                          type="checkbox"
+                          checked={grantPrivs.has(opt.value)}
+                          onChange={e => {
+                            const next = new Set(grantPrivs);
+                            e.target.checked ? next.add(opt.value) : next.delete(opt.value);
+                            setGrantPrivs(next);
+                          }}
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Step 3: Scope */}
+                {grantCategory !== 'system' && (
+                  <div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginBottom: '6px', fontWeight: 600 }}>③ 作用范围</div>
+                    <div className="cascade-row">
+                      {grantCategory === 'catalog' ? (
+                        <>
+                          <div className="cascade-col">
+                            <label>范围</label>
+                            <select value={grantScope} onChange={e => setGrantScope(e.target.value)}>
+                              <option value="catalog">指定 Catalog</option>
+                              <option value="all_catalogs">ALL CATALOGS</option>
+                            </select>
+                          </div>
+                          {grantScope === 'catalog' && (
+                            <div className="cascade-col">
+                              <label>Catalog</label>
+                              <select value={grantCatalog} onChange={e => setGrantCatalog(e.target.value)}>
+                                {grantCatalogs.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            </div>
+                          )}
+                        </>
+                      ) : grantCategory === 'function' ? (
+                        <>
+                          <div className="cascade-col">
+                            <label>范围</label>
+                            <select value={grantScope} onChange={e => setGrantScope(e.target.value)}>
+                              <option value="all_global">ALL GLOBAL FUNCTIONS</option>
+                              <option value="all_in_db">指定数据库内全部函数</option>
+                              <option value="specific">指定函数</option>
+                            </select>
+                          </div>
+                          {grantScope === 'all_in_db' && (
+                            <div className="cascade-col">
+                              <label>Database</label>
+                              <select value={grantDb} onChange={e => setGrantDb(e.target.value)}>
+                                {grantDbs.map(d => <option key={d} value={d}>{d}</option>)}
+                              </select>
+                            </div>
+                          )}
+                          {grantScope === 'specific' && (
+                            <div className="cascade-col">
+                              <label>函数名</label>
+                              <input value={grantSpecific} onChange={e => setGrantSpecific(e.target.value)} placeholder="function_name" />
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        /* DDL / DML */
+                        <>
+                          <div className="cascade-col">
+                            <label>Catalog</label>
+                            <select value={grantCatalog} onChange={e => {
+                              setGrantCatalog(e.target.value);
+                              loadGrantDbs(e.target.value);
+                            }}>
+                              {grantCatalogs.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                          <div className="cascade-col">
+                            <label>范围</label>
+                            <select value={grantScope} onChange={e => setGrantScope(e.target.value)}>
+                              <option value="all_tables">ALL TABLES IN DATABASE</option>
+                              <option value="all_mvs">ALL MVs IN DATABASE</option>
+                              <option value="database">DATABASE 级别</option>
+                              <option value="all_dbs">ALL DATABASES</option>
+                              <option value="specific_table">指定表</option>
+                              <option value="specific_mv">指定物化视图</option>
+                            </select>
+                          </div>
+                          {grantScope !== 'all_dbs' && (
+                            <div className="cascade-col">
+                              <label>Database</label>
+                              <select value={grantDb} onChange={e => setGrantDb(e.target.value)}>
+                                {grantDbs.map(d => <option key={d} value={d}>{d}</option>)}
+                              </select>
+                            </div>
+                          )}
+                          {(grantScope === 'specific_table' || grantScope === 'specific_mv') && (
+                            <div className="cascade-col">
+                              <label>{grantScope === 'specific_table' ? '表名' : 'MV名'}</label>
+                              <input value={grantSpecific} onChange={e => setGrantSpecific(e.target.value)} placeholder={grantScope === 'specific_table' ? 'table_name' : 'mv_name'} />
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* SQL Preview */}
-                <div style={{ marginTop: '8px', padding: '10px 14px', backgroundColor: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-secondary)' }}>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>SQL 预览</div>
-                  <code style={{ fontSize: '0.78rem', color: 'var(--primary-600)', fontFamily: "'JetBrains Mono', monospace", wordBreak: 'break-all' }}>
-                    {grantAction === 'grant_privilege' ? 'GRANT' : 'REVOKE'} {grantPriv} ON {grantObjType} {grantObjName || '...'} {grantAction === 'grant_privilege' ? 'TO' : 'FROM'} {showGrant}
+                <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-secondary)' }}>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', marginBottom: '3px' }}>SQL 预览</div>
+                  <code style={{ fontSize: '0.77rem', color: 'var(--primary-600)', fontFamily: "'JetBrains Mono', monospace", wordBreak: 'break-all', lineHeight: 1.6 }}>
+                    {buildGrantSQL('GRANT') || '请选择权限和范围...'}
                   </code>
                 </div>
               </div>
-              <div className="modal-footer">
+              <div className="modal-footer" style={{ gap: '8px' }}>
                 <button className="btn btn-secondary" onClick={() => setShowGrant(null)}>取消</button>
-                <button className="btn btn-primary" onClick={handleGrantPrivilege} disabled={!grantObjName && !grantObjType.startsWith('ALL')}>
-                  <Shield size={16} /> {grantAction === 'grant_privilege' ? '授权' : '撤销'}
+                <button
+                  className="btn"
+                  disabled={grantPrivs.size === 0 || grantSubmitting}
+                  style={{ backgroundColor: 'var(--danger-500, #ef4444)', color: '#fff', border: 'none' }}
+                  onClick={() => handleGrantSubmit('REVOKE')}
+                >
+                  {grantSubmitting ? <span className="spinner" /> : <ShieldOff size={14} />} REVOKE
+                </button>
+                <button
+                  className="btn btn-primary"
+                  disabled={grantPrivs.size === 0 || grantSubmitting}
+                  onClick={() => handleGrantSubmit('GRANT')}
+                >
+                  {grantSubmitting ? <span className="spinner" /> : <Shield size={14} />} GRANT
                 </button>
               </div>
             </div>
