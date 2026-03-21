@@ -5,7 +5,8 @@ import { useSession } from '@/hooks/useSession';
 import { useDataFetch } from '@/hooks/useDataFetch';
 import { usePagination } from '@/hooks/usePagination';
 import { str } from '@/lib/utils';
-import { PageHeader, StatusBadge, DatabaseBadge, SearchToolbar, DataTable, ErrorBanner, SuccessToast } from '@/components/ui';
+import { PageHeader, StatusBadge, DatabaseBadge, SearchToolbar, DataTable, ErrorBanner, SuccessToast, CacheTimeBadge } from '@/components/ui';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Pause, Play, Square, Database, Radio, AlertTriangle } from 'lucide-react';
 
 const RL_ICONS: Record<string, string> = { RUNNING: '▶', PAUSED: '⏸', STOPPED: '⏹', CANCELLED: '✗', NEED_SCHEDULE: '⏳', UNSTABLE: '⚠' };
@@ -14,8 +15,9 @@ export default function RoutineLoadPage() {
   const { session } = useSession();
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState('all');
+  const [stopConfirm, setStopConfirm] = useState<{ db: string; name: string } | null>(null);
 
-  const { data: jobs, loading, refreshing, error, success, setError, setSuccess, refresh } = useDataFetch(
+  const { data: jobs, loading, refreshing, error, success, cachedAt, fromCache, setError, setSuccess, refresh } = useDataFetch(
     { url: (sid, isRefresh) => `/api/routine-load?sessionId=${encodeURIComponent(sid)}${isRefresh ? '&refresh=true' : ''}`, extract: json => (json.jobs || []) as Record<string, unknown>[] },
     [] as Record<string, unknown>[]
   );
@@ -36,7 +38,6 @@ export default function RoutineLoadPage() {
   async function handleAction(action: string, db: string, name: string) {
     if (!session) return;
     const labels: Record<string, string> = { pause: '暂停', resume: '恢复', stop: '停止' };
-    if (action === 'stop' && !confirm(`确定要停止 Routine Load 任务 ${name} 吗？停止后不可恢复！`)) return;
     try {
       const res = await fetch('/api/routine-load', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -46,11 +47,12 @@ export default function RoutineLoadPage() {
       if (data.error) setError(data.error);
       else { setSuccess(`${labels[action] || action} ${name} 成功`); refresh(true); }
     } catch (err) { setError(String(err)); }
+    if (action === 'stop') setStopConfirm(null);
   }
 
   return (
     <>
-      <PageHeader title="Routine Load 管理" description={`管理 Kafka 持续导入任务 · ${jobs.length} 个任务`} onRefresh={() => refresh(true)} refreshing={refreshing} loading={loading} />
+      <PageHeader title="Routine Load 管理" breadcrumb={[{ label: '导入管理' }, { label: 'Routine Load' }]} description={<>管理 Kafka 持续导入任务 · {jobs.length} 个任务<CacheTimeBadge cachedAt={cachedAt} fromCache={fromCache} /></>} onRefresh={() => refresh(true)} refreshing={refreshing} loading={loading} logSource="routine-load" />
       <div className="page-body">
         <ErrorBanner error={error} />
         <SuccessToast message={success} />
@@ -60,7 +62,7 @@ export default function RoutineLoadPage() {
         <DataTable loading={loading} empty={filtered.length === 0} emptyIcon={<Radio size={48} />}
           emptyText={search || stateFilter !== 'all' ? '没有匹配的任务' : '暂无 Routine Load 任务'}
           footerLeft={<>共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个任务</>}
-          footerRight="SHOW ALL ROUTINE LOAD"
+          footerRight="SELECT * FROM information_schema.routine_load_jobs"
           pagination={{ page: pg.page, pageSize: pg.pageSize, totalPages: pg.totalPages, totalItems: pg.totalItems, onPageChange: pg.setPage, onPageSizeChange: pg.setPageSize }}>
           <thead>
             <tr>
@@ -114,9 +116,9 @@ export default function RoutineLoadPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
-                      {state === 'RUNNING' && <button className="btn btn-ghost btn-icon" style={{ color: 'var(--warning-600)' }} onClick={() => handleAction('pause', db, name)} title="暂停"><Pause size={14} /></button>}
-                      {state === 'PAUSED' && <button className="btn btn-ghost btn-icon" style={{ color: 'var(--success-600)' }} onClick={() => handleAction('resume', db, name)} title="恢复"><Play size={14} /></button>}
-                      {(state === 'RUNNING' || state === 'PAUSED') && <button className="btn btn-ghost btn-icon" style={{ color: 'var(--danger-500)' }} onClick={() => handleAction('stop', db, name)} title="停止"><Square size={14} /></button>}
+                      {state === 'RUNNING' && <button className="btn-action btn-action-primary" onClick={() => handleAction('pause', db, name)} title="暂停"><Pause size={14} /></button>}
+                      {state === 'PAUSED' && <button className="btn-action btn-action-success" onClick={() => handleAction('resume', db, name)} title="恢复"><Play size={14} /></button>}
+                      {(state === 'RUNNING' || state === 'PAUSED') && <button className="btn-action btn-action-danger" onClick={() => setStopConfirm({ db, name })} title="停止"><Square size={14} /></button>}
                     </div>
                   </td>
                 </tr>
@@ -125,6 +127,14 @@ export default function RoutineLoadPage() {
           </tbody>
         </DataTable>
       </div>
+      <ConfirmModal
+        open={!!stopConfirm}
+        title="停止 Routine Load"
+        message={`确定要停止 Routine Load 任务 ${stopConfirm?.name} 吗？停止后不可恢复！`}
+        confirmText="停止"
+        onConfirm={() => stopConfirm && handleAction('stop', stopConfirm.db, stopConfirm.name)}
+        onCancel={() => setStopConfirm(null)}
+      />
     </>
   );
 }

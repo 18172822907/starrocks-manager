@@ -5,6 +5,7 @@ import { useSession } from '@/hooks/useSession';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/ui';
 import { Shield, RefreshCw, Search, Plus, X } from 'lucide-react';
+import Breadcrumb from '@/components/Breadcrumb';
 
 export default function PrivilegesPage() {
   const { session } = useSession();
@@ -77,6 +78,7 @@ export default function PrivilegesPage() {
   return (
     <>
       <div className="page-header">
+        <Breadcrumb items={[{ label: '权限管理' }, { label: '权限管理' }]} />
         <div className="page-header-row">
           <div>
             <h1 className="page-title">权限管理</h1>

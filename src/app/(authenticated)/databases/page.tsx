@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { usePagination } from '@/hooks/usePagination';
-import { Pagination } from '@/components/ui';
+import { Pagination, CommandLogButton} from '@/components/ui';
 import Breadcrumb from '@/components/Breadcrumb';
 import Link from 'next/link';
 import {
@@ -109,35 +109,33 @@ export default function DatabasesPage() {
     <>
       {/* Page Header */}
       <div className="page-header">
-        <Breadcrumb items={[{ label: '数据库浏览' }]} />
+        <Breadcrumb items={[{ label: '数据管理' }, { label: '数据库浏览' }]} />
         <div className="page-header-row">
           <div>
             <h1 className="page-title">数据库浏览</h1>
             <p className="page-description">
               查看和管理数据库 · {databases.length} 个数据库
               {lastRefreshed && (
-                <span style={{ marginLeft: '8px', opacity: 0.6, fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <span className="timestamp-hint">
                   <Clock size={11} /> {fromCache ? '缓存时间：' : '刷新时间：'}{lastRefreshed}
-                  {fromCache && <span style={{ marginLeft: '4px', padding: '1px 6px', borderRadius: '999px', fontSize: '0.68rem', backgroundColor: 'rgba(234,179,8,0.12)', color: 'var(--warning-600)', fontWeight: 600 }}>CACHE</span>}
+                  {fromCache && <span className="badge-cache">CACHE</span>}
                 </span>
               )}
             </p>
           </div>
-          <button className="btn btn-secondary" onClick={() => fetchDatabases(true)} disabled={loading || refreshing}>
-            <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} />
-            {refreshing ? '刷新中...' : '刷新'}
-          </button>
+          <div className="flex gap-2">
+            <CommandLogButton source="databases" title="数据库浏览" />
+            <button className="btn btn-secondary" onClick={() => fetchDatabases(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} />
+              {refreshing ? '刷新中...' : '刷新'}
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="page-body">
         {error && (
-          <div style={{
-            color: 'var(--danger-500)', marginBottom: '16px', padding: '10px 14px',
-            background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem'
-          }}>
-            {error}
-          </div>
+          <div className="error-banner">{error}</div>
         )}
 
         {/* Search */}
@@ -212,12 +210,7 @@ export default function DatabasesPage() {
                           fontWeight: 600, color: 'var(--primary-600)', textDecoration: 'none',
                         }}
                       >
-                        <div style={{
-                          width: '28px', height: '28px', borderRadius: 'var(--radius-md)',
-                          backgroundColor: 'var(--primary-50)', color: 'var(--primary-600)',
-                          border: '1px solid var(--primary-100)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                        }}>
+                        <div className="icon-box icon-box-sm icon-box-primary">
                           <Database size={14} />
                         </div>
                         {db.name}
@@ -275,11 +268,11 @@ export default function DatabasesPage() {
                     <td style={{ textAlign: 'center' }}>
                       <Link
                         href={`/databases/${encodeURIComponent(db.name)}`}
-                        className="btn btn-ghost btn-icon"
+                        className="btn-action btn-action-view"
                         title={`进入 ${db.name}`}
                         style={{ display: 'inline-flex' }}
                       >
-                        <ArrowRight size={16} />
+                        <ArrowRight size={14} />
                       </Link>
                     </td>
                   </tr>
@@ -289,15 +282,14 @@ export default function DatabasesPage() {
             </table>
 
             {/* Footer summary */}
-            <div style={{
-              padding: '10px 16px', borderTop: '1px solid var(--border-secondary)',
-              fontSize: '0.78rem', color: 'var(--text-tertiary)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
-            }}>
-              <span>
-                共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个数据库
-                {search && ` (过滤自 ${databases.length} 个)`}
-              </span>
+            <div className="table-footer">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span>
+                  共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个数据库
+                  {search && ` (过滤自 ${databases.length} 个)`}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> SHOW DATABASES</span>
+              </div>
               <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
             </div>
           </div>

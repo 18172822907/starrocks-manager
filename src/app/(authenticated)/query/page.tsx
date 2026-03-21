@@ -3,6 +3,8 @@
 import React, { useState, useRef } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { Play, Clock, Download, Trash2, Terminal } from 'lucide-react';
+import { CommandLogButton } from '@/components/ui';
+import Breadcrumb from '@/components/Breadcrumb';
 
 interface QueryResult {
   rows: Record<string, unknown>[];
@@ -102,10 +104,14 @@ export default function QueryPage() {
   return (
     <>
       <div className="page-header">
+        <Breadcrumb items={[{ label: '数据管理' }, { label: 'SQL 查询' }]} />
         <div className="page-header-row">
           <div>
             <h1 className="page-title">SQL 查询</h1>
             <p className="page-description">执行 SQL 查询并查看结果 · Ctrl+Enter 执行</p>
+          </div>
+          <div className="flex gap-2">
+            <CommandLogButton source="query" title="SQL 查询" />
           </div>
         </div>
       </div>

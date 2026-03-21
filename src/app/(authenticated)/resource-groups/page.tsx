@@ -3,11 +3,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { usePagination } from '@/hooks/usePagination';
-import { Pagination } from '@/components/ui';
+import { Pagination, CommandLogButton} from '@/components/ui';
 import {
   Layers, Plus, Trash2, RefreshCw, Search, X, Clock, Edit3, PlusCircle,
   Cpu, MemoryStick, ChevronUp, ChevronDown, ChevronsUpDown, Activity, Hash, Zap, Database
 } from 'lucide-react';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import Breadcrumb from '@/components/Breadcrumb';
 
 interface ResourceGroup {
   name: string;
@@ -136,6 +138,8 @@ export default function ResourceGroupsPage() {
   const [saving, setSaving] = useState(false);
   const [addClassifier, setAddClassifier] = useState<string | null>(null);
   const [classifierInput, setClassifierInput] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [dropClassifierConfirm, setDropClassifierConfirm] = useState<{ group: string; id: string } | null>(null);
 
   const fetchGroups = useCallback(async (forceRefresh = false) => {
     if (!session) return;
@@ -180,7 +184,7 @@ export default function ResourceGroupsPage() {
   }
 
   async function handleDelete(name: string) {
-    if (!session || !confirm(`确定要删除资源组 '${name}' 吗？`)) return;
+    if (!session) return;
     try {
       const res = await fetch('/api/resource-groups', {
         method: 'DELETE',
@@ -191,6 +195,7 @@ export default function ResourceGroupsPage() {
       if (data.error) setError(data.error);
       else { setSuccess('资源组已删除'); fetchGroups(); }
     } catch (err) { setError(String(err)); }
+    setDeleteConfirm(null);
   }
 
   function openEdit(g: ResourceGroup) {
@@ -231,7 +236,7 @@ export default function ResourceGroupsPage() {
   }
 
   async function handleDropClassifier(groupName: string, classifierId: string) {
-    if (!session || !confirm(`确定要删除分类器 #${classifierId} 吗？`)) return;
+    if (!session) return;
     try {
       const res = await fetch('/api/resource-groups', {
         method: 'PUT',
@@ -242,6 +247,7 @@ export default function ResourceGroupsPage() {
       if (data.error) setError(data.error);
       else { setSuccess(`分类器 #${classifierId} 已删除`); fetchGroups(true); }
     } catch (err) { setError(String(err)); }
+    setDropClassifierConfirm(null);
   }
 
   async function handleAddClassifier() {
@@ -286,6 +292,7 @@ export default function ResourceGroupsPage() {
   return (
     <>
       <div className="page-header">
+        <Breadcrumb items={[{ label: '资源管理' }, { label: '资源组管理' }]} />
         <div className="page-header-row">
           <div>
             <h1 className="page-title">资源组管理</h1>
@@ -300,11 +307,12 @@ export default function ResourceGroupsPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <button className="btn btn-secondary" onClick={() => fetchGroups(true)} disabled={loading || refreshing}>
-              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
-            </button>
             <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
               <Plus size={16} /> 创建资源组
+            </button>
+            <CommandLogButton source="resource-groups" title="资源组管理" />
+            <button className="btn btn-secondary" onClick={() => fetchGroups(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
             </button>
           </div>
         </div>
@@ -493,7 +501,7 @@ export default function ResourceGroupsPage() {
                                     {c.extras && <span style={{ marginLeft: '4px', color: 'var(--text-secondary)' }}>{c.extras}</span>}
                                   </span>
                                   <button
-                                    onClick={() => handleDropClassifier(g.name, c.id)}
+                                    onClick={() => setDropClassifierConfirm({ group: g.name, id: c.id })}
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger-400)', padding: '0 2px', lineHeight: 1 }}
                                     title={`删除分类器 #${c.id}`}
                                   >
@@ -529,19 +537,17 @@ export default function ResourceGroupsPage() {
 
                       {/* Sticky: 操作 */}
                       <td style={{...stickyRightBody, width: '90px'}}>
-                        <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
                           <button
-                            className="btn btn-ghost btn-icon"
-                            style={{ color: 'var(--primary-600)' }}
+                            className="btn-action btn-action-primary"
                             onClick={() => openEdit(g)}
                             title="编辑资源组"
                           >
                             <Edit3 size={14} />
                           </button>
                           <button
-                            className="btn btn-ghost btn-icon"
-                            style={{ color: 'var(--danger-500)' }}
-                            onClick={() => handleDelete(g.name)}
+                            className="btn-action btn-action-danger"
+                            onClick={() => setDeleteConfirm(g.name)}
                             title="删除资源组"
                           >
                             <Trash2 size={14} />
@@ -569,6 +575,7 @@ export default function ResourceGroupsPage() {
               共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个资源组
               {search && ` (过滤自 ${groups.length} 个)`}
             </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> SHOW RESOURCE GROUPS</span>
             <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
           </div>
           </>
@@ -757,6 +764,22 @@ export default function ResourceGroupsPage() {
           </div>
         )}
       </div>
+      <ConfirmModal
+        open={!!deleteConfirm}
+        title="删除资源组"
+        message={`确定要删除资源组 '${deleteConfirm}' 吗？此操作不可撤销。`}
+        confirmText="删除"
+        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
+        onCancel={() => setDeleteConfirm(null)}
+      />
+      <ConfirmModal
+        open={!!dropClassifierConfirm}
+        title="删除分类器"
+        message={`确定要删除分类器 #${dropClassifierConfirm?.id} 吗？`}
+        confirmText="删除"
+        onConfirm={() => dropClassifierConfirm && handleDropClassifier(dropClassifierConfirm.group, dropClassifierConfirm.id)}
+        onCancel={() => setDropClassifierConfirm(null)}
+      />
     </>
   );
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
 import { getBlobCache, setBlobCache } from '@/lib/local-db';
+import { escapeBacktickId } from '@/lib/sql-sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const result = await executeQuery(sessionId, 'SHOW CATALOGS');
+    const result = await executeQuery(sessionId, 'SHOW CATALOGS', undefined, 'catalogs');
     const catalogs = result.rows;
 
     let cachedAt: string | undefined;
@@ -43,13 +44,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'sessionId and sql are required' }, { status: 400 });
     }
 
-    // Basic validation: must be a CREATE EXTERNAL CATALOG statement
+    // Strict validation: must be a CREATE CATALOG statement, no semicolons (multi-statement attack)
     const trimmed = sql.trim().toUpperCase();
     if (!trimmed.startsWith('CREATE EXTERNAL CATALOG') && !trimmed.startsWith('CREATE CATALOG')) {
       return NextResponse.json({ error: 'SQL must be a CREATE EXTERNAL CATALOG statement' }, { status: 400 });
     }
+    if (sql.includes(';')) {
+      return NextResponse.json({ error: 'SQL must not contain semicolons' }, { status: 400 });
+    }
 
-    await executeQuery(sessionId, sql);
+    await executeQuery(sessionId, sql, undefined, 'catalogs');
 
     // Invalidate cache
     try { setBlobCache('catalogs_cache', sessionId, null as unknown as Record<string, unknown>[]); } catch { /* ignore */ }
@@ -75,7 +79,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Cannot drop the default catalog' }, { status: 400 });
     }
 
-    await executeQuery(sessionId, `DROP CATALOG \`${catalogName}\``);
+    await executeQuery(sessionId, `DROP CATALOG \`${escapeBacktickId(catalogName)}\``, undefined, 'catalogs');
 
     // Invalidate cache
     try { setBlobCache('catalogs_cache', sessionId, null as unknown as Record<string, unknown>[]); } catch { /* ignore */ }

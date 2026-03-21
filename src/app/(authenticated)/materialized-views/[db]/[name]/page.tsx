@@ -5,7 +5,8 @@ import { useSession } from '@/hooks/useSession';
 import { useParams, useRouter } from 'next/navigation';
 import { Copy, Check, RefreshCw, Play, Power, Trash2, AlertTriangle, Clock, Settings } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
-import SqlHighlighter from '@/components/SqlHighlighter';
+import dynamic from 'next/dynamic';
+const SqlHighlighter = dynamic(() => import('@/components/SqlHighlighter'), { ssr: false });
 import { Modal } from '@/components/ui/Modal';
 
 interface ColumnInfo {

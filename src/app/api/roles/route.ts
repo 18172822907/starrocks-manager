@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
 import { getBlobCache, setBlobCache } from '@/lib/local-db';
+import { escapeSqlString } from '@/lib/sql-sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Fetch fresh from StarRocks ──
-    const result = await executeQuery(sessionId, 'SHOW ROLES');
+    const result = await executeQuery(sessionId, 'SHOW ROLES', undefined, 'roles');
     const roles = result.rows;
 
     // Persist to SQLite cache
@@ -45,14 +46,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session ID and role name required' }, { status: 400 });
     }
 
+    const safeRole = escapeSqlString(roleName);
     if (action === 'create') {
-      await executeQuery(sessionId, `CREATE ROLE '${roleName}'`);
+      await executeQuery(sessionId, `CREATE ROLE '${safeRole}'`, undefined, 'roles');
     } else if (action === 'grant' && userName) {
-      const host = userHost || '%';
-      await executeQuery(sessionId, `GRANT '${roleName}' TO '${userName}'@'${host}'`);
+      const safeUser = escapeSqlString(userName);
+      const safeHost = escapeSqlString(userHost || '%');
+      await executeQuery(sessionId, `GRANT '${safeRole}' TO '${safeUser}'@'${safeHost}'`, undefined, 'roles');
     } else if (action === 'revoke' && userName) {
-      const host = userHost || '%';
-      await executeQuery(sessionId, `REVOKE '${roleName}' FROM '${userName}'@'${host}'`);
+      const safeUser = escapeSqlString(userName);
+      const safeHost = escapeSqlString(userHost || '%');
+      await executeQuery(sessionId, `REVOKE '${safeRole}' FROM '${safeUser}'@'${safeHost}'`, undefined, 'roles');
     }
 
     return NextResponse.json({ success: true });
@@ -71,7 +75,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Session ID and role name required' }, { status: 400 });
     }
 
-    await executeQuery(sessionId, `DROP ROLE '${roleName}'`);
+    await executeQuery(sessionId, `DROP ROLE '${escapeSqlString(roleName)}'`, undefined, 'roles');
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json(

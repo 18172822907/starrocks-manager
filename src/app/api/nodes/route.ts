@@ -19,10 +19,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all node types in parallel
-    const [feResult, cnResult, beResult] = await Promise.allSettled([
-      executeQuery(sessionId, 'SHOW FRONTENDS'),
-      executeQuery(sessionId, 'SHOW COMPUTE NODES'),
-      executeQuery(sessionId, 'SHOW BACKENDS'),
+    const [feResult, cnResult, beResult, brokerResult] = await Promise.allSettled([
+      executeQuery(sessionId, 'SHOW FRONTENDS', undefined, 'nodes'),
+      executeQuery(sessionId, 'SHOW COMPUTE NODES', undefined, 'nodes'),
+      executeQuery(sessionId, 'SHOW BACKENDS', undefined, 'nodes'),
+      executeQuery(sessionId, 'SHOW BROKER', undefined, 'nodes'),
     ]);
 
     const frontends = feResult.status === 'fulfilled'
@@ -34,8 +35,11 @@ export async function GET(request: NextRequest) {
     const backends = beResult.status === 'fulfilled'
       ? (Array.isArray(beResult.value.rows) ? beResult.value.rows : [])
       : [];
+    const brokers = brokerResult.status === 'fulfilled'
+      ? (Array.isArray(brokerResult.value.rows) ? brokerResult.value.rows : [])
+      : [];
 
-    const payload = { frontends, computeNodes, backends };
+    const payload = { frontends, computeNodes, backends, brokers };
     let cachedAt: string | undefined;
     try { cachedAt = setBlobCache('nodes_cache', sessionId, payload); } catch { /* non-fatal */ }
 
@@ -50,7 +54,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, action, nodeType, host, port } = await request.json();
+    const { sessionId, action, nodeType, host, port, brokerName } = await request.json();
     if (!sessionId || !action || !nodeType || !host || !port) {
       return NextResponse.json({ error: 'sessionId, action, nodeType, host, port required' }, { status: 400 });
     }
@@ -63,10 +67,12 @@ export async function POST(request: NextRequest) {
       else if (nodeType === 'fe_observer') sql = `ALTER SYSTEM ADD OBSERVER ${hostPort}`;
       else if (nodeType === 'cn') sql = `ALTER SYSTEM ADD COMPUTE NODE ${hostPort}`;
       else if (nodeType === 'be') sql = `ALTER SYSTEM ADD BACKEND ${hostPort}`;
+      else if (nodeType === 'broker') sql = `ALTER SYSTEM ADD BROKER ${brokerName || 'broker0'} ${hostPort}`;
     } else if (action === 'drop') {
       if (nodeType === 'fe') sql = `ALTER SYSTEM DROP FRONTEND ${hostPort}`;
       else if (nodeType === 'cn') sql = `ALTER SYSTEM DROP COMPUTE NODE ${hostPort}`;
       else if (nodeType === 'be') sql = `ALTER SYSTEM DROP BACKEND ${hostPort}`;
+      else if (nodeType === 'broker') sql = `ALTER SYSTEM DROP BROKER ${brokerName || 'broker0'} ${hostPort}`;
     } else if (action === 'decommission') {
       if (nodeType === 'cn') sql = `ALTER SYSTEM DECOMMISSION COMPUTE NODE ${hostPort}`;
       else if (nodeType === 'be') sql = `ALTER SYSTEM DECOMMISSION BACKEND ${hostPort}`;
@@ -76,7 +82,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Invalid action/nodeType: ${action}/${nodeType}` }, { status: 400 });
     }
 
-    await executeQuery(sessionId, sql);
+    await executeQuery(sessionId, sql, undefined, 'nodes');
     return NextResponse.json({ success: true, sql });
   } catch (err) {
     return NextResponse.json(

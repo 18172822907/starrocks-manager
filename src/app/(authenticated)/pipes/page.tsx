@@ -5,14 +5,16 @@ import { useSession } from '@/hooks/useSession';
 import { useDataFetch } from '@/hooks/useDataFetch';
 import { usePagination } from '@/hooks/usePagination';
 import { str } from '@/lib/utils';
-import { PageHeader, StatusBadge, DatabaseBadge, SearchToolbar, DataTable, ErrorBanner, SuccessToast } from '@/components/ui';
+import { PageHeader, StatusBadge, DatabaseBadge, SearchToolbar, DataTable, ErrorBanner, SuccessToast, CacheTimeBadge } from '@/components/ui';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Pause, Play, Trash2, Database, GitBranch } from 'lucide-react';
 
 export default function PipesPage() {
   const { session } = useSession();
   const [search, setSearch] = useState('');
+  const [dropConfirm, setDropConfirm] = useState<{ db: string; name: string } | null>(null);
 
-  const { data: pipes, loading, refreshing, error, success, setError, setSuccess, refresh } = useDataFetch(
+  const { data: pipes, loading, refreshing, error, success, cachedAt, fromCache, setError, setSuccess, refresh } = useDataFetch(
     { url: (sid, isRefresh) => `/api/pipes?sessionId=${encodeURIComponent(sid)}${isRefresh ? '&refresh=true' : ''}`, extract: json => (json.pipes || []) as Record<string, unknown>[] },
     [] as Record<string, unknown>[]
   );
@@ -28,7 +30,6 @@ export default function PipesPage() {
 
   async function handleAction(action: string, db: string, name: string) {
     if (!session) return;
-    if (action === 'drop' && !confirm(`确定要删除 Pipe ${name} 吗？`)) return;
     const labels: Record<string, string> = { suspend: '暂停', resume: '恢复', drop: '删除' };
     try {
       const res = await fetch('/api/pipes', {
@@ -39,11 +40,12 @@ export default function PipesPage() {
       if (data.error) setError(data.error);
       else { setSuccess(`${labels[action] || action} ${name} 成功`); refresh(true); }
     } catch (err) { setError(String(err)); }
+    if (action === 'drop') setDropConfirm(null);
   }
 
   return (
     <>
-      <PageHeader title="Pipes 管理" description={`管理持续导入 Pipe · ${pipes.length} 个 Pipe`} onRefresh={() => refresh(true)} refreshing={refreshing} loading={loading} />
+      <PageHeader title="Pipes 管理" breadcrumb={[{ label: '导入管理' }, { label: 'Pipes' }]} description={<>管理持续导入 Pipe · {pipes.length} 个 Pipe<CacheTimeBadge cachedAt={cachedAt} fromCache={fromCache} /></>} onRefresh={() => refresh(true)} refreshing={refreshing} loading={loading} logSource="pipes" />
       <div className="page-body">
         <ErrorBanner error={error} />
         <SuccessToast message={success} />
@@ -51,7 +53,7 @@ export default function PipesPage() {
         <DataTable loading={loading} empty={filtered.length === 0} emptyIcon={<GitBranch size={48} />}
           emptyText={search ? '没有匹配的 Pipe' : '暂无 Pipe'}
           footerLeft={<>共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个 Pipe</>}
-          footerRight="SHOW PIPES"
+          footerRight="SELECT * FROM information_schema.pipes"
           pagination={{ page: pg.page, pageSize: pg.pageSize, totalPages: pg.totalPages, totalItems: pg.totalItems, onPageChange: pg.setPage, onPageSizeChange: pg.setPageSize }}>
           <thead>
             <tr>
@@ -96,9 +98,9 @@ export default function PipesPage() {
                   <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{created || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
-                      {state.toUpperCase() === 'RUNNING' && <button className="btn btn-ghost btn-icon" style={{ color: 'var(--warning-600)' }} onClick={() => handleAction('suspend', db, name)} title="暂停"><Pause size={14} /></button>}
-                      {(state.toUpperCase() === 'SUSPEND' || state.toUpperCase() === 'SUSPENDED') && <button className="btn btn-ghost btn-icon" style={{ color: 'var(--success-600)' }} onClick={() => handleAction('resume', db, name)} title="恢复"><Play size={14} /></button>}
-                      <button className="btn btn-ghost btn-icon" style={{ color: 'var(--danger-500)' }} onClick={() => handleAction('drop', db, name)} title="删除"><Trash2 size={14} /></button>
+                      {state.toUpperCase() === 'RUNNING' && <button className="btn-action btn-action-primary" onClick={() => handleAction('suspend', db, name)} title="暂停"><Pause size={14} /></button>}
+                      {(state.toUpperCase() === 'SUSPEND' || state.toUpperCase() === 'SUSPENDED') && <button className="btn-action btn-action-success" onClick={() => handleAction('resume', db, name)} title="恢复"><Play size={14} /></button>}
+                      <button className="btn-action btn-action-danger" onClick={() => setDropConfirm({ db, name })} title="删除"><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -107,6 +109,14 @@ export default function PipesPage() {
           </tbody>
         </DataTable>
       </div>
+      <ConfirmModal
+        open={!!dropConfirm}
+        title="删除 Pipe"
+        message={`确定要删除 Pipe ${dropConfirm?.name} 吗？此操作不可撤销。`}
+        confirmText="删除"
+        onConfirm={() => dropConfirm && handleAction('drop', dropConfirm.db, dropConfirm.name)}
+        onCancel={() => setDropConfirm(null)}
+      />
     </>
   );
 }

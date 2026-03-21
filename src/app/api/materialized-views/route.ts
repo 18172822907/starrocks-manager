@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
 import { getBlobCache, setBlobCache } from '@/lib/local-db';
+import { escapeBacktickId, escapeSqlString } from '@/lib/sql-sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
               TABLE_ROWS, QUERY_REWRITE_STATUS, CREATOR
        FROM information_schema.materialized_views
        ORDER BY TABLE_SCHEMA, TABLE_NAME`
-    );
+    , undefined, 'materialized-views');
 
     const views = result.rows as Record<string, unknown>[];
 
@@ -52,17 +53,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
     }
 
-    const fullName = dbName && mvName ? `\`${dbName}\`.\`${mvName}\`` : mvName ? `\`${mvName}\`` : '';
+    const fullName = dbName && mvName ? `\`${escapeBacktickId(dbName)}\`.\`${escapeBacktickId(mvName)}\`` : mvName ? `\`${escapeBacktickId(mvName)}\`` : '';
 
     if (action === 'refresh') {
       if (!fullName) return NextResponse.json({ error: 'MV name required' }, { status: 400 });
-      await executeQuery(sessionId, `REFRESH MATERIALIZED VIEW ${fullName}`);
+      await executeQuery(sessionId, `REFRESH MATERIALIZED VIEW ${fullName}`, undefined, 'materialized-views');
       return NextResponse.json({ success: true });
     }
 
     if (action === 'drop') {
       if (!fullName) return NextResponse.json({ error: 'MV name required' }, { status: 400 });
-      await executeQuery(sessionId, `DROP MATERIALIZED VIEW ${fullName}`);
+      await executeQuery(sessionId, `DROP MATERIALIZED VIEW ${fullName}`, undefined, 'materialized-views');
       // Invalidate cache
       try { setBlobCache('materialized_views_cache', sessionId, null as unknown as Record<string, unknown>[]); } catch { /* ignore */ }
       return NextResponse.json({ success: true });
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'show_create') {
       if (!mvName || !dbName) return NextResponse.json({ error: 'DB and MV name required' }, { status: 400 });
-      const result = await executeQuery(sessionId, `SHOW CREATE MATERIALIZED VIEW \`${dbName}\`.\`${mvName}\``);
+      const result = await executeQuery(sessionId, `SHOW CREATE MATERIALIZED VIEW \`${escapeBacktickId(dbName)}\`.\`${escapeBacktickId(mvName)}\``, undefined, 'materialized-views');
       const row = (result.rows as Record<string, unknown>[])[0];
       const definition = row ? String(row['Create Materialized View'] || row['Create Table'] || Object.values(row)[1] || '') : '';
       return NextResponse.json({ definition });
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     if (action === 'alter_active') {
       if (!fullName) return NextResponse.json({ error: 'MV name required' }, { status: 400 });
       const active = body.active === true || body.active === 'true';
-      await executeQuery(sessionId, `ALTER MATERIALIZED VIEW ${fullName} ${active ? 'ACTIVE' : 'INACTIVE'}`);
+      await executeQuery(sessionId, `ALTER MATERIALIZED VIEW ${fullName} ${active ? 'ACTIVE' : 'INACTIVE'}`, undefined, 'materialized-views');
       // Invalidate cache
       try { setBlobCache('materialized_views_cache', sessionId, null as unknown as Record<string, unknown>[]); } catch { /* ignore */ }
       return NextResponse.json({ success: true });
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
       if (!fullName) return NextResponse.json({ error: 'MV name required' }, { status: 400 });
       const interval = body.interval; // e.g. "INTERVAL 1 HOUR"
       if (!interval) return NextResponse.json({ error: 'interval is required' }, { status: 400 });
-      await executeQuery(sessionId, `ALTER MATERIALIZED VIEW ${fullName} REFRESH ASYNC EVERY(${interval})`);
+      await executeQuery(sessionId, `ALTER MATERIALIZED VIEW ${fullName} REFRESH ASYNC EVERY(${interval})`, undefined, 'materialized-views');
       try { setBlobCache('materialized_views_cache', sessionId, null as unknown as Record<string, unknown>[]); } catch { /* ignore */ }
       return NextResponse.json({ success: true });
     }
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
       if (!fullName) return NextResponse.json({ error: 'MV name required' }, { status: 400 });
       const resourceGroup = body.resourceGroup;
       if (!resourceGroup) return NextResponse.json({ error: 'resourceGroup is required' }, { status: 400 });
-      await executeQuery(sessionId, `ALTER MATERIALIZED VIEW ${fullName} SET ('resource_group' = '${resourceGroup}')`);
+      await executeQuery(sessionId, `ALTER MATERIALIZED VIEW ${fullName} SET ('resource_group' = '${escapeSqlString(resourceGroup)}')`, undefined, 'materialized-views');
       try { setBlobCache('materialized_views_cache', sessionId, null as unknown as Record<string, unknown>[]); } catch { /* ignore */ }
       return NextResponse.json({ success: true });
     }
@@ -110,7 +111,10 @@ export async function POST(request: NextRequest) {
       if (!trimmed.startsWith('CREATE MATERIALIZED VIEW') && !trimmed.startsWith('CREATE')) {
         return NextResponse.json({ error: 'SQL must be a CREATE MATERIALIZED VIEW statement' }, { status: 400 });
       }
-      await executeQuery(sessionId, sql);
+      if (sql.includes(';')) {
+        return NextResponse.json({ error: 'SQL must not contain semicolons' }, { status: 400 });
+      }
+      await executeQuery(sessionId, sql, undefined, 'materialized-views');
       try { setBlobCache('materialized_views_cache', sessionId, null as unknown as Record<string, unknown>[]); } catch { /* ignore */ }
       return NextResponse.json({ success: true });
     }

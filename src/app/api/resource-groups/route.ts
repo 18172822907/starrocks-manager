@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
 import { getBlobCache, setBlobCache } from '@/lib/local-db';
+import { escapeBacktickId, validateNumeric } from '@/lib/sql-sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,11 +27,12 @@ export async function GET(request: NextRequest) {
       const result = await executeQuery(
         sessionId,
         `SELECT name, id, cpu_core_limit, mem_limit, concurrency_limit, type, create_time, classifiers
-         FROM information_schema.resource_groups ORDER BY name ASC`
+         FROM information_schema.resource_groups ORDER BY name ASC`,
+        undefined, 'resource-groups'
       );
       resourceGroups = result.rows as Record<string, unknown>[];
     } catch {
-      const result = await executeQuery(sessionId, 'SHOW RESOURCE GROUPS ALL');
+      const result = await executeQuery(sessionId, 'SHOW RESOURCE GROUPS ALL', undefined, 'resource-groups');
       resourceGroups = (result.rows as Record<string, unknown>[]).map(row => ({
         name:                        row['name']                        ?? row['Name']                        ?? '',
         id:                          row['id']                          ?? row['Id']                          ?? null,
@@ -88,8 +90,8 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'No properties to update' }, { status: 400 });
       }
 
-      const sql = `ALTER RESOURCE GROUP ${name} WITH (${props.join(', ')})`;
-      await executeQuery(sessionId, sql);
+      const sql = `ALTER RESOURCE GROUP \`${escapeBacktickId(name)}\` WITH (${props.join(', ')})`;
+      await executeQuery(sessionId, sql, undefined, 'resource-groups');
       return NextResponse.json({ success: true, sql });
     }
 
@@ -99,8 +101,8 @@ export async function PUT(request: NextRequest) {
       if (!classifierProps) {
         return NextResponse.json({ error: 'Classifier properties required' }, { status: 400 });
       }
-      const sql = `ALTER RESOURCE GROUP ${name} ADD (${classifierProps})`;
-      await executeQuery(sessionId, sql);
+      const sql = `ALTER RESOURCE GROUP \`${escapeBacktickId(name)}\` ADD (${classifierProps})`;
+      await executeQuery(sessionId, sql, undefined, 'resource-groups');
       return NextResponse.json({ success: true, sql });
     }
 
@@ -110,8 +112,9 @@ export async function PUT(request: NextRequest) {
       if (!classifierId) {
         return NextResponse.json({ error: 'Classifier ID required' }, { status: 400 });
       }
-      const sql = `ALTER RESOURCE GROUP ${name} DROP (CLASSIFIER_ID = ${classifierId})`;
-      await executeQuery(sessionId, sql);
+      const safeId = validateNumeric(classifierId, 'classifierId');
+      const sql = `ALTER RESOURCE GROUP \`${escapeBacktickId(name)}\` DROP (CLASSIFIER_ID = ${safeId})`;
+      await executeQuery(sessionId, sql, undefined, 'resource-groups');
       return NextResponse.json({ success: true, sql });
     }
 
@@ -143,7 +146,7 @@ export async function POST(request: NextRequest) {
       if (bigQueryMemLimit)         props.push(`big_query_mem_limit=${bigQueryMemLimit}`);
 
       const withClause = props.length > 0 ? ` WITH (${props.join(', ')})` : '';
-      await executeQuery(sessionId, `CREATE RESOURCE GROUP ${name}${withClause}`);
+      await executeQuery(sessionId, `CREATE RESOURCE GROUP \`${escapeBacktickId(name)}\`${withClause}`, undefined, 'resource-groups');
     }
 
     return NextResponse.json({ success: true });
@@ -162,7 +165,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Session ID and name required' }, { status: 400 });
     }
 
-    await executeQuery(sessionId, `DROP RESOURCE GROUP ${name}`);
+    await executeQuery(sessionId, `DROP RESOURCE GROUP \`${escapeBacktickId(name)}\``, undefined, 'resource-groups');
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json(

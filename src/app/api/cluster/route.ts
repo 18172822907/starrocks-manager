@@ -8,19 +8,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
     }
 
-    // Fetch FE, BE, CN info in parallel
-    const [frontends, backends, computeNodes, variables] = await Promise.all([
-      executeQuery(sessionId, 'SHOW FRONTENDS').catch(() => ({ rows: [], fields: [] })),
-      executeQuery(sessionId, 'SHOW BACKENDS').catch(() => ({ rows: [], fields: [] })),
-      executeQuery(sessionId, 'SHOW COMPUTE NODES').catch(() => ({ rows: [], fields: [] })),
-      executeQuery(sessionId, "SHOW VARIABLES LIKE 'version%'").catch(() => ({ rows: [], fields: [] })),
+    // Fetch FE, BE, CN, Broker info in parallel
+    const [frontends, backends, computeNodes, brokers] = await Promise.all([
+      executeQuery(sessionId, 'SHOW FRONTENDS', undefined, 'dashboard').catch(() => ({ rows: [], fields: [] })),
+      executeQuery(sessionId, 'SHOW BACKENDS', undefined, 'dashboard').catch(() => ({ rows: [], fields: [] })),
+      executeQuery(sessionId, 'SHOW COMPUTE NODES', undefined, 'dashboard').catch(() => ({ rows: [], fields: [] })),
+      executeQuery(sessionId, 'SHOW BROKER', undefined, 'dashboard').catch(() => ({ rows: [], fields: [] })),
     ]);
 
     return NextResponse.json({
       frontends: frontends.rows,
       backends: backends.rows,
       computeNodes: computeNodes.rows,
-      variables: variables.rows,
+      brokers: brokers.rows,
     });
   } catch (err) {
     return NextResponse.json(

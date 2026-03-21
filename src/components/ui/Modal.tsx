@@ -1,6 +1,7 @@
 'use client';
 
 import React, { ReactNode } from 'react';
+import ReactDOM from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -14,7 +15,7 @@ interface ModalProps {
 
 export function Modal({ open, onClose, title, maxWidth = '480px', footer, children }: ModalProps) {
   if (!open) return null;
-  return (
+  const modal = (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth }}>
         <div className="modal-header">
@@ -26,6 +27,11 @@ export function Modal({ open, onClose, title, maxWidth = '480px', footer, childr
       </div>
     </div>
   );
+  // Use portal to render at document.body, escaping any stacking context (e.g., backdrop-filter)
+  if (typeof document !== 'undefined') {
+    return ReactDOM.createPortal(modal, document.body);
+  }
+  return modal;
 }
 
 /** SQL Preview block inside modals */

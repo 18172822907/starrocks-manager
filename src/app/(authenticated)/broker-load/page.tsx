@@ -5,15 +5,17 @@ import { useSession } from '@/hooks/useSession';
 import { useDataFetch } from '@/hooks/useDataFetch';
 import { usePagination } from '@/hooks/usePagination';
 import { str } from '@/lib/utils';
-import { PageHeader, StatusBadge, DatabaseBadge, SearchToolbar, DataTable, ErrorBanner, SuccessToast } from '@/components/ui';
+import { PageHeader, StatusBadge, DatabaseBadge, SearchToolbar, DataTable, ErrorBanner, SuccessToast, CacheTimeBadge } from '@/components/ui';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { HardDrive, XCircle, Database } from 'lucide-react';
 
 export default function BrokerLoadPage() {
   const { session } = useSession();
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState('all');
+  const [cancelConfirm, setCancelConfirm] = useState<{ db: string; label: string } | null>(null);
 
-  const { data: loads, loading, refreshing, error, success, setError, setSuccess, refresh } = useDataFetch(
+  const { data: loads, loading, refreshing, error, success, cachedAt, fromCache, setError, setSuccess, refresh } = useDataFetch(
     { url: (sid, isRefresh) => `/api/broker-load?sessionId=${encodeURIComponent(sid)}${isRefresh ? '&refresh=true' : ''}`, extract: json => (json.loads || []) as Record<string, unknown>[] },
     [] as Record<string, unknown>[]
   );
@@ -34,7 +36,7 @@ export default function BrokerLoadPage() {
   useEffect(() => { pg.resetPage(); }, [search, stateFilter]);
 
   async function handleCancel(db: string, label: string) {
-    if (!session || !confirm(`确定要取消导入任务 ${label} 吗？`)) return;
+    if (!session) return;
     try {
       const res = await fetch('/api/broker-load', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -44,11 +46,12 @@ export default function BrokerLoadPage() {
       if (data.error) setError(data.error);
       else { setSuccess(`任务 ${label} 已取消`); refresh(true); }
     } catch (err) { setError(String(err)); }
+    setCancelConfirm(null);
   }
 
   return (
     <>
-      <PageHeader title="Broker Load 管理" description={`管理批量导入任务 · ${loads.length} 条记录`} onRefresh={() => refresh(true)} refreshing={refreshing} loading={loading} />
+      <PageHeader title="Broker Load 管理" breadcrumb={[{ label: '导入管理' }, { label: 'Broker Load' }]} description={<>管理批量导入任务 · {loads.length} 条记录<CacheTimeBadge cachedAt={cachedAt} fromCache={fromCache} /></>} onRefresh={() => refresh(true)} refreshing={refreshing} loading={loading} logSource="broker-load" />
       <div className="page-body">
         <ErrorBanner error={error} />
         <SuccessToast message={success} />
@@ -59,7 +62,7 @@ export default function BrokerLoadPage() {
         <DataTable loading={loading} empty={filtered.length === 0} emptyIcon={<HardDrive size={48} />}
           emptyText={search || stateFilter !== 'all' ? '没有匹配的任务' : '暂无 Broker Load 任务'}
           footerLeft={<>共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 条</>}
-          footerRight="SHOW LOAD"
+          footerRight="SELECT * FROM information_schema.loads WHERE TYPE='BROKER'"
           pagination={{ page: pg.page, pageSize: pg.pageSize, totalPages: pg.totalPages, totalItems: pg.totalItems, onPageChange: pg.setPage, onPageSizeChange: pg.setPageSize }}>
           <thead>
             <tr>
@@ -108,7 +111,7 @@ export default function BrokerLoadPage() {
                   <td style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={url}>{url || '—'}</td>
                   <td style={{ textAlign: 'center' }}>
                     {canCancel && (
-                      <button className="btn btn-ghost btn-icon" style={{ color: 'var(--danger-500)' }} onClick={() => handleCancel(db, label)} title="取消"><XCircle size={14} /></button>
+                      <button className="btn-action btn-action-danger" onClick={() => setCancelConfirm({ db, label })} title="取消"><XCircle size={14} /></button>
                     )}
                   </td>
                 </tr>
@@ -117,6 +120,14 @@ export default function BrokerLoadPage() {
           </tbody>
         </DataTable>
       </div>
+      <ConfirmModal
+        open={!!cancelConfirm}
+        title="取消导入任务"
+        message={`确定要取消导入任务 ${cancelConfirm?.label} 吗？`}
+        confirmText="取消任务"
+        onConfirm={() => cancelConfirm && handleCancel(cancelConfirm.db, cancelConfirm.label)}
+        onCancel={() => setCancelConfirm(null)}
+      />
     </>
   );
 }

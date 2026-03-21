@@ -17,10 +17,10 @@ export async function GET(
 
     // Fetch multiple details in parallel
     const [schema, createTable, partitions, preview] = await Promise.all([
-      executeQuery(sessionId, `DESC ${fullName}`).catch(() => ({ rows: [], fields: [] })),
-      executeQuery(sessionId, `SHOW CREATE TABLE ${fullName}`).catch(() => ({ rows: [], fields: [] })),
-      executeQuery(sessionId, `SHOW PARTITIONS FROM ${fullName}`).catch(() => ({ rows: [], fields: [] })),
-      executeQuery(sessionId, `SELECT * FROM ${fullName} LIMIT ${limit}`).catch(() => ({ rows: [], fields: [] })),
+      executeQuery(sessionId, `DESC ${fullName}`).catch(() => ({ rows: [], fields: [] }), undefined, 'databases'),
+      executeQuery(sessionId, `SHOW CREATE TABLE ${fullName}`).catch(() => ({ rows: [], fields: [] }), undefined, 'databases'),
+      executeQuery(sessionId, `SHOW PARTITIONS FROM ${fullName}`).catch(() => ({ rows: [], fields: [] }), undefined, 'databases'),
+      executeQuery(sessionId, `SELECT * FROM ${fullName} LIMIT ${limit}`).catch(() => ({ rows: [], fields: [] }), undefined, 'databases'),
     ]);
 
     // Extract DDL

@@ -2,11 +2,12 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ChevronRight, Database } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 export interface BreadcrumbItem {
   label: string;
   href?: string;
+  icon?: React.ReactNode;
 }
 
 interface BreadcrumbProps {
@@ -21,18 +22,23 @@ export default function Breadcrumb({ items }: BreadcrumbProps) {
         display: 'flex',
         alignItems: 'center',
         gap: '6px',
-        fontSize: '0.82rem',
-        padding: '10px 0',
+        fontSize: '0.78rem',
+        marginBottom: '2px',
         flexWrap: 'wrap',
       }}
     >
       {items.map((item, idx) => {
         const isLast = idx === items.length - 1;
+        const iconEl = item.icon ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: '4px', opacity: 0.7 }}>
+            {item.icon}
+          </span>
+        ) : null;
         return (
           <React.Fragment key={idx}>
             {idx > 0 && (
               <ChevronRight
-                size={14}
+                size={13}
                 style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}
               />
             )}
@@ -45,19 +51,11 @@ export default function Breadcrumb({ items }: BreadcrumbProps) {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
                 }}
               >
-                {idx === 0 && (
-                  <Database
-                    size={13}
-                    style={{
-                      display: 'inline-block',
-                      verticalAlign: '-2px',
-                      marginRight: '5px',
-                      opacity: 0.7,
-                    }}
-                  />
-                )}
+                {iconEl}
                 {item.label}
               </span>
             ) : (
@@ -72,21 +70,13 @@ export default function Breadcrumb({ items }: BreadcrumbProps) {
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                   transition: 'color 0.15s',
+                  display: 'inline-flex',
+                  alignItems: 'center',
                 }}
                 onMouseEnter={e => (e.currentTarget.style.color = 'var(--primary-700)')}
                 onMouseLeave={e => (e.currentTarget.style.color = 'var(--primary-600)')}
               >
-                {idx === 0 && (
-                  <Database
-                    size={13}
-                    style={{
-                      display: 'inline-block',
-                      verticalAlign: '-2px',
-                      marginRight: '5px',
-                      opacity: 0.7,
-                    }}
-                  />
-                )}
+                {iconEl}
                 {item.label}
               </Link>
             )}

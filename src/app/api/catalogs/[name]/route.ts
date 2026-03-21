@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
+import { escapeBacktickId } from '@/lib/sql-sanitize';
 
 export async function GET(
   request: NextRequest,
@@ -13,7 +14,7 @@ export async function GET(
 
     const { name } = await params;
 
-    const result = await executeQuery(sessionId, `SHOW CREATE CATALOG \`${name}\``);
+    const result = await executeQuery(sessionId, `SHOW CREATE CATALOG \`${escapeBacktickId(name)}\``, undefined, 'catalogs');
     const row = result.rows[0] as Record<string, string> | undefined;
 
     // The result typically has columns: Catalog, Type, Create Catalog

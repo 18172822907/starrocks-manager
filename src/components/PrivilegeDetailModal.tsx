@@ -16,23 +16,35 @@ interface PrivilegeDetailModalProps {
   grants: string[];
   catalogGrants?: CatalogGrant[];
   onClose: () => void;
+  onRevoke?: (rawGrant: string) => void;
 }
 
-/* ── Single privilege item ──────────────────────────────────────────── */
+function isRoleGrant(raw: string): boolean {
+  // Role grants look like: GRANT 'roleName', 'roleName2' TO 'user'@'%'
+  // They don't have ON keyword, just GRANT ... TO
+  return /^GRANT\s+'[^']+'/i.test(raw) && !/\bON\b/i.test(raw);
+}
 
-function PrivilegeItem({ priv }: { priv: ParsedPrivilege }) {
+function PrivilegeItem({ priv, onRevoke, revoking }: { priv: ParsedPrivilege; onRevoke?: (raw: string) => void; revoking?: boolean }) {
+  const canRevoke = onRevoke && !isRoleGrant(priv.raw);
+
   if (!priv.privilege && !priv.target) {
     return (
-      <code style={{
-        fontSize: '0.74rem', color: 'var(--text-secondary)',
-        fontFamily: "'JetBrains Mono', monospace", wordBreak: 'break-all',
-      }}>
-        {priv.raw}
-      </code>
+      <div className={canRevoke ? 'priv-row-revokable' : ''} style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+        <code style={{
+          fontSize: '0.74rem', color: 'var(--text-secondary)',
+          fontFamily: "'JetBrains Mono', monospace", wordBreak: 'break-all', flex: 1,
+        }}>
+          {priv.raw}
+        </code>
+        {isRoleGrant(priv.raw) && (
+          <span style={{ fontSize: '0.62rem', color: 'var(--text-tertiary)', opacity: 0.6, whiteSpace: 'nowrap' }}>角色</span>
+        )}
+      </div>
     );
   }
   return (
-    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+    <div className={canRevoke ? 'priv-row-revokable' : ''} style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'nowrap', flex: 1 }}>
       <code style={{
         fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-primary)',
         fontFamily: "'JetBrains Mono', monospace",
@@ -42,19 +54,31 @@ function PrivilegeItem({ priv }: { priv: ParsedPrivilege }) {
       <span style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', fontWeight: 500 }}>ON</span>
       <code style={{
         fontSize: '0.72rem', color: 'var(--text-secondary)',
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: "'JetBrains Mono', monospace", flex: 1,
       }}>
         {priv.target}
       </code>
+      {canRevoke && (
+        <button
+          className="priv-revoke-btn"
+          onClick={e => { e.stopPropagation(); onRevoke(priv.raw); }}
+          disabled={revoking}
+          title="撤销此权限"
+        >
+          <X size={11} />
+        </button>
+      )}
     </div>
   );
 }
 
 /* ── Collapsible category section ───────────────────────────────────── */
 
-export function CategorySection({ group, defaultCollapsed = false }: {
+export function CategorySection({ group, defaultCollapsed = false, onRevoke, revoking }: {
   group: CategorisedGroup;
   defaultCollapsed?: boolean;
+  onRevoke?: (raw: string) => void;
+  revoking?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const IconComp = ICON_MAP[group.icon] || Key;
@@ -112,7 +136,7 @@ export function CategorySection({ group, defaultCollapsed = false }: {
                 {i + 1}
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <PrivilegeItem priv={priv} />
+                <PrivilegeItem priv={priv} onRevoke={onRevoke} revoking={revoking} />
               </div>
             </div>
           ))}
@@ -124,7 +148,7 @@ export function CategorySection({ group, defaultCollapsed = false }: {
 
 /* ── Catalog scope section ──────────────────────────────────────────── */
 
-export function CatalogSectionBlock({ group }: { group: CatalogGroup }) {
+export function CatalogSectionBlock({ group, onRevoke, revoking }: { group: CatalogGroup; onRevoke?: (raw: string) => void; revoking?: boolean }) {
   const displayName = group.catalogName === 'default_catalog'
     ? '内部权限'
     : `外部 Catalog: ${group.catalogName}`;
@@ -162,7 +186,7 @@ export function CatalogSectionBlock({ group }: { group: CatalogGroup }) {
       {/* Categories inside */}
       <div style={{ padding: '4px 0' }}>
         {group.categories.map((cat, i) => (
-          <CategorySection key={i} group={cat} />
+          <CategorySection key={i} group={cat} onRevoke={onRevoke} revoking={revoking} />
         ))}
       </div>
     </div>
@@ -171,7 +195,7 @@ export function CatalogSectionBlock({ group }: { group: CatalogGroup }) {
 
 /* ── Main Modal ─────────────────────────────────────────────────────── */
 
-export default function PrivilegeDetailModal({ title, grants, catalogGrants, onClose }: PrivilegeDetailModalProps) {
+export default function PrivilegeDetailModal({ title, grants, catalogGrants, onClose, onRevoke }: PrivilegeDetailModalProps) {
   const catalogGroups = useMemo(() => classifyGrants(grants, catalogGrants), [grants, catalogGrants]);
   const totalCount = grants.length;
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -251,7 +275,7 @@ export default function PrivilegeDetailModal({ title, grants, catalogGrants, onC
         {/* Body – scrollable */}
         <div className="modal-lg-body" ref={bodyRef}>
           {catalogGroups.map((cg, i) => (
-            <CatalogSectionBlock key={i} group={cg} />
+            <CatalogSectionBlock key={i} group={cg} onRevoke={onRevoke} />
           ))}
         </div>
 

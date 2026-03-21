@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
 import { getBlobCache, setBlobCache } from '@/lib/local-db';
+import { escapeBacktickId } from '@/lib/sql-sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,22 +19,21 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const dbResult = await executeQuery(sessionId, 'SHOW DATABASES');
-    const databases = (dbResult.rows as Record<string, unknown>[]).map(r =>
-      String(r['Database'] || r['database'] || Object.values(r)[0] || '')
-    ).filter(d => d && !['information_schema', '_statistics_', 'starrocks_monitor'].includes(d));
+    // Single query via information_schema.pipes — replaces the old N+1 pattern
+    // (was: SHOW DATABASES + SHOW PIPES FROM `db` for each database)
+    // The frontend already handles UPPER_SNAKE_CASE column names (PIPE_NAME, STATE, etc.)
+    const result = await executeQuery(
+      sessionId,
+      `SELECT * FROM information_schema.pipes ORDER BY PIPE_ID DESC`,
+      undefined,
+      'pipes'
+    );
 
-    const allPipes: Record<string, unknown>[] = [];
-
-    for (const db of databases) {
-      try {
-        const result = await executeQuery(sessionId, `SHOW PIPES FROM \`${db}\``);
-        const rows = result.rows as Record<string, unknown>[];
-        for (const row of rows) {
-          allPipes.push({ ...row, _db: db });
-        }
-      } catch { /* skip */ }
-    }
+    const rows = result.rows as Record<string, unknown>[];
+    const allPipes = rows.map(row => ({
+      ...row,
+      _db: String(row['DATABASE_NAME'] || row['database_name'] || ''),
+    }));
 
     let cachedAt: string | undefined;
     try { cachedAt = setBlobCache('pipes_cache', sessionId, allPipes); } catch { /* non-fatal */ }
@@ -54,18 +54,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session ID and pipe name required' }, { status: 400 });
     }
 
-    const fullName = dbName ? `\`${dbName}\`.\`${pipeName}\`` : `\`${pipeName}\``;
+    const fullName = dbName ? `\`${escapeBacktickId(dbName)}\`.\`${escapeBacktickId(pipeName)}\`` : `\`${escapeBacktickId(pipeName)}\``;
 
     if (action === 'suspend') {
-      await executeQuery(sessionId, `ALTER PIPE ${fullName} SUSPEND`);
+      await executeQuery(sessionId, `ALTER PIPE ${fullName} SUSPEND`, undefined, 'pipes');
       return NextResponse.json({ success: true });
     }
     if (action === 'resume') {
-      await executeQuery(sessionId, `ALTER PIPE ${fullName} RESUME`);
+      await executeQuery(sessionId, `ALTER PIPE ${fullName} RESUME`, undefined, 'pipes');
       return NextResponse.json({ success: true });
     }
     if (action === 'drop') {
-      await executeQuery(sessionId, `DROP PIPE ${fullName}`);
+      await executeQuery(sessionId, `DROP PIPE ${fullName}`, undefined, 'pipes');
       return NextResponse.json({ success: true });
     }
 

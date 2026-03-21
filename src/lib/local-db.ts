@@ -129,12 +129,41 @@ export function getLocalDb(): Database.Database {
       cached_at     DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Task runs cache (per-task drill-down, keyed by sessionId::taskName)
+    CREATE TABLE IF NOT EXISTS task_runs_cache (
+      connection_id TEXT PRIMARY KEY,
+      data          TEXT NOT NULL,
+      cached_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Task runs all cache (generic task runs list)
+    CREATE TABLE IF NOT EXISTS task_runs_all_cache (
+      connection_id TEXT PRIMARY KEY,
+      data          TEXT NOT NULL,
+      cached_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- Nodes cache
     CREATE TABLE IF NOT EXISTS nodes_cache (
       connection_id TEXT PRIMARY KEY,
       data          TEXT NOT NULL,
       cached_at     DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Command execution log
+    CREATE TABLE IF NOT EXISTS command_log (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id    TEXT NOT NULL,
+      source        TEXT NOT NULL DEFAULT 'unknown',
+      sql_text      TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'success',
+      error_message TEXT,
+      row_count     INTEGER DEFAULT 0,
+      duration_ms   INTEGER DEFAULT 0,
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_command_log_session_source ON command_log(session_id, source);
+    CREATE INDEX IF NOT EXISTS idx_command_log_created ON command_log(created_at);
   `);
 
   return db;
@@ -223,6 +252,9 @@ export function setSetting(key: string, value: string): void {
 
 // ---- DB Metadata Cache (databases + table counts) ----
 
+// Default cache max age: 5 minutes (in milliseconds)
+export const DEFAULT_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+
 export interface DbCacheEntry {
   id: number;
   connection_id: string;
@@ -233,9 +265,9 @@ export interface DbCacheEntry {
   cached_at: string;
 }
 
-export function getDbCache(connectionId: string): DbCacheEntry[] {
+export function getDbCache(connectionId: string, maxAgeMs: number = DEFAULT_CACHE_MAX_AGE_MS): DbCacheEntry[] {
   const db = getLocalDb();
-  return db
+  const rows = db
     .prepare('SELECT * FROM db_metadata_cache WHERE connection_id = ? ORDER BY db_name ASC')
     .all(connectionId)
     .map((r) => {
@@ -244,6 +276,16 @@ export function getDbCache(connectionId: string): DbCacheEntry[] {
       const cachedAt = row.cached_at.endsWith('Z') ? row.cached_at : row.cached_at.replace(' ', 'T') + 'Z';
       return { ...row, cached_at: cachedAt };
     }) as DbCacheEntry[];
+
+  // Check expiry
+  if (rows.length > 0 && maxAgeMs > 0) {
+    const cachedTime = new Date(rows[0].cached_at).getTime();
+    if (Date.now() - cachedTime > maxAgeMs) {
+      return []; // Cache expired
+    }
+  }
+
+  return rows;
 }
 
 export function upsertDbCache(
@@ -289,15 +331,24 @@ interface BlobCacheRow {
   cached_at: string;
 }
 
-type CacheTable = 'users_cache' | 'roles_cache' | 'resource_groups_cache' | 'catalogs_cache' | 'functions_cache' | 'variables_cache' | 'materialized_views_cache' | 'broker_load_cache' | 'routine_load_cache' | 'pipes_cache' | 'tasks_cache' | 'nodes_cache';
+type CacheTable = 'users_cache' | 'roles_cache' | 'resource_groups_cache' | 'catalogs_cache' | 'functions_cache' | 'variables_cache' | 'materialized_views_cache' | 'broker_load_cache' | 'routine_load_cache' | 'pipes_cache' | 'tasks_cache' | 'task_runs_cache' | 'task_runs_all_cache' | 'nodes_cache';
 
-export function getBlobCache(table: CacheTable, connectionId: string): { data: unknown; cachedAt: string } | null {
+export function getBlobCache(table: CacheTable, connectionId: string, maxAgeMs: number = DEFAULT_CACHE_MAX_AGE_MS): { data: unknown; cachedAt: string } | null {
   const db = getLocalDb();
   const row = db.prepare(`SELECT data, cached_at FROM ${table} WHERE connection_id = ?`).get(connectionId) as BlobCacheRow | undefined;
   if (!row) return null;
   try {
     // SQLite CURRENT_TIMESTAMP is UTC but has no 'Z' suffix — append it so JS parses as UTC
     const cachedAt = row.cached_at.endsWith('Z') ? row.cached_at : row.cached_at.replace(' ', 'T') + 'Z';
+
+    // Check expiry
+    if (maxAgeMs > 0) {
+      const cachedTime = new Date(cachedAt).getTime();
+      if (Date.now() - cachedTime > maxAgeMs) {
+        return null; // Cache expired
+      }
+    }
+
     return { data: JSON.parse(row.data), cachedAt };
   } catch {
     return null;
@@ -316,4 +367,67 @@ export function setBlobCache(table: CacheTable, connectionId: string, data: unkn
   const row = db.prepare(`SELECT cached_at FROM ${table} WHERE connection_id = ?`).get(connectionId) as { cached_at: string };
   const rawAt = row.cached_at;
   return rawAt.endsWith('Z') ? rawAt : rawAt.replace(' ', 'T') + 'Z';
+}
+
+// ---- Command Execution Log ----
+
+export interface CommandLogEntry {
+  id: number;
+  session_id: string;
+  source: string;
+  sql_text: string;
+  status: string;
+  error_message: string | null;
+  row_count: number;
+  duration_ms: number;
+  created_at: string;
+}
+
+export function appendCommandLog(
+  sessionId: string,
+  source: string,
+  sqlText: string,
+  status: 'success' | 'error',
+  rowCount: number,
+  durationMs: number,
+  errorMessage?: string,
+): void {
+  try {
+    const db = getLocalDb();
+    db.prepare(`
+      INSERT INTO command_log (session_id, source, sql_text, status, error_message, row_count, duration_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(sessionId, source, sqlText, status, errorMessage || null, rowCount, durationMs);
+    // Auto-cleanup: keep only last 500 entries per session to prevent unbounded growth
+    db.prepare(`
+      DELETE FROM command_log WHERE session_id = ? AND id NOT IN (
+        SELECT id FROM command_log WHERE session_id = ? ORDER BY id DESC LIMIT 500
+      )
+    `).run(sessionId, sessionId);
+  } catch { /* ignore logging errors to avoid disrupting main flow */ }
+}
+
+export function getCommandLogs(
+  sessionId: string,
+  source?: string,
+  limit = 100,
+): CommandLogEntry[] {
+  const db = getLocalDb();
+  if (source) {
+    return db.prepare(
+      `SELECT * FROM command_log WHERE session_id = ? AND source = ? ORDER BY id DESC LIMIT ?`
+    ).all(sessionId, source, limit) as CommandLogEntry[];
+  }
+  return db.prepare(
+    `SELECT * FROM command_log WHERE session_id = ? ORDER BY id DESC LIMIT ?`
+  ).all(sessionId, limit) as CommandLogEntry[];
+}
+
+export function clearCommandLogs(sessionId: string, source?: string): void {
+  const db = getLocalDb();
+  if (source) {
+    db.prepare('DELETE FROM command_log WHERE session_id = ? AND source = ?').run(sessionId, source);
+  } else {
+    db.prepare('DELETE FROM command_log WHERE session_id = ?').run(sessionId);
+  }
 }

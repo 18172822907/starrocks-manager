@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
+import { validateIdentifier, validatePrivilege, validateObjectType, escapeSqlString } from '@/lib/sql-sanitize';
 
 /**
  * POST /api/grants — Execute GRANT / REVOKE statements
@@ -25,31 +26,42 @@ export async function POST(request: NextRequest) {
 
     let sql = '';
 
+    // Validate inputs before SQL construction
+    validateIdentifier(grantee, 'grantee');
+
     if (action === 'grant_privilege') {
       if (!privilege || !objectType || !objectName) {
         return NextResponse.json({ error: 'privilege, objectType, objectName required' }, { status: 400 });
       }
-      sql = `GRANT ${privilege} ON ${objectType} ${objectName} TO ${grantee}`;
+      const safePrivilege = validatePrivilege(privilege);
+      const safeObjectType = validateObjectType(objectType);
+      validateIdentifier(objectName, 'objectName');
+      sql = `GRANT ${safePrivilege} ON ${safeObjectType} ${objectName} TO ${grantee}`;
     } else if (action === 'revoke_privilege') {
       if (!privilege || !objectType || !objectName) {
         return NextResponse.json({ error: 'privilege, objectType, objectName required' }, { status: 400 });
       }
-      sql = `REVOKE ${privilege} ON ${objectType} ${objectName} FROM ${grantee}`;
+      const safePrivilege = validatePrivilege(privilege);
+      const safeObjectType = validateObjectType(objectType);
+      validateIdentifier(objectName, 'objectName');
+      sql = `REVOKE ${safePrivilege} ON ${safeObjectType} ${objectName} FROM ${grantee}`;
     } else if (action === 'grant_role') {
       if (!roleName) {
         return NextResponse.json({ error: 'roleName required' }, { status: 400 });
       }
-      sql = `GRANT '${roleName}' TO ${grantee}`;
+      const safeRole = escapeSqlString(roleName);
+      sql = `GRANT '${safeRole}' TO ${grantee}`;
     } else if (action === 'revoke_role') {
       if (!roleName) {
         return NextResponse.json({ error: 'roleName required' }, { status: 400 });
       }
-      sql = `REVOKE '${roleName}' FROM ${grantee}`;
+      const safeRole = escapeSqlString(roleName);
+      sql = `REVOKE '${safeRole}' FROM ${grantee}`;
     } else {
       return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
 
-    await executeQuery(sessionId, sql);
+    await executeQuery(sessionId, sql, undefined, 'grants');
     return NextResponse.json({ success: true, sql });
   } catch (err) {
     return NextResponse.json(
@@ -76,9 +88,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'sessionId and target required' }, { status: 400 });
     }
 
+    // Validate target to prevent injection
+    validateIdentifier(target, 'target');
+
     // SHOW GRANTS FOR returns 3 columns: identity, catalog, grant statement.
     // Detect column names from result fields to correctly identify catalog and grant columns.
-    const result = await executeQuery(sessionId, `SHOW GRANTS FOR ${target}`);
+    const result = await executeQuery(sessionId, `SHOW GRANTS FOR ${target}`, undefined, 'grants');
     const rows = result.rows as Record<string, unknown>[];
     const fieldNames = result.fields.map(f => f.name);
 

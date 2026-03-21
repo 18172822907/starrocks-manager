@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 
 interface UsePaginationOptions {
   defaultPageSize?: number;
@@ -32,12 +32,12 @@ export function usePagination<T>(data: T[], opts?: UsePaginationOptions): UsePag
     return data.slice(start, start + pageSize);
   }, [data, safePage, pageSize]);
 
-  const setPageSize = (s: number) => {
+  const setPageSize = useCallback((s: number) => {
     setPageSizeRaw(s);
     setPage(1); // Reset to first page when changing page size
-  };
+  }, []);
 
-  const resetPage = () => setPage(1);
+  const resetPage = useCallback(() => setPage(1), []);
 
   return {
     page: safePage,

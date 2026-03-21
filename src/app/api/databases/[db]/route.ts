@@ -20,7 +20,7 @@ export async function GET(
        FROM information_schema.tables
        WHERE TABLE_SCHEMA = ?
        ORDER BY TABLE_NAME`,
-      [db]
+      [db], 'databases'
     );
 
     // Cross-reference with materialized_views to correctly label MVs
@@ -30,7 +30,7 @@ export async function GET(
       const mvResult = await executeQuery(
         sessionId,
         `SELECT TABLE_NAME FROM information_schema.materialized_views WHERE TABLE_SCHEMA = ?`,
-        [db]
+        [db], 'databases'
       );
       mvNames = new Set(mvResult.rows.map((r: Record<string, unknown>) =>
         String(r['TABLE_NAME'] || Object.values(r)[0])

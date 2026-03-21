@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
-import { upsertDbCache, getDbCache, setBlobCache } from '@/lib/local-db';
+import { upsertDbCache, getDbCache } from '@/lib/local-db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,74 +29,80 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ── Fetch fresh from StarRocks ──
-    const result = await executeQuery(sessionId, 'SHOW DATABASES');
-    const databases = result.rows.map((r: Record<string, unknown>) =>
+    // ── Fetch fresh from StarRocks (optimized: 3 queries instead of 2N) ──
+
+    // 1) Get all database names
+    const dbResult = await executeQuery(sessionId, 'SHOW DATABASES', undefined, 'databases');
+    const dbNames = dbResult.rows.map((r: Record<string, unknown>) =>
       String(r['Database'] || r['database'] || Object.values(r)[0])
     );
 
-    const dbDetails = await Promise.all(
-      databases.map(async (dbName) => {
-        try {
-          const tables = await executeQuery(
-            sessionId,
-            `SELECT TABLE_NAME, TABLE_TYPE
-             FROM information_schema.tables WHERE TABLE_SCHEMA = ?`,
-            [dbName]
-          );
+    // 2) Aggregated table/view counts per schema (single query for ALL databases)
+    const [tableAgg, mvAgg] = await Promise.all([
+      executeQuery(
+        sessionId,
+        `SELECT TABLE_SCHEMA, TABLE_TYPE, COUNT(*) AS cnt
+         FROM information_schema.tables
+         GROUP BY TABLE_SCHEMA, TABLE_TYPE`,
+        undefined, 'databases'
+      ).catch(() => ({ rows: [], fields: [] })),
 
-          // Query MVs separately — StarRocks stores them as BASE TABLE in information_schema.tables
-          let mvNames: Set<string> = new Set();
-          try {
-            const mvResult = await executeQuery(
-              sessionId,
-              `SELECT TABLE_NAME FROM information_schema.materialized_views WHERE TABLE_SCHEMA = ?`,
-              [dbName]
-            );
-            mvNames = new Set(mvResult.rows.map((r: Record<string, unknown>) =>
-              String(r['TABLE_NAME'] || Object.values(r)[0])
-            ));
-          } catch {
-            // materialized_views table might not exist in older versions
-          }
+      // MV names per schema (StarRocks stores MVs as BASE TABLE in tables, need MV table to distinguish)
+      executeQuery(
+        sessionId,
+        `SELECT TABLE_SCHEMA, COUNT(*) AS cnt
+         FROM information_schema.materialized_views
+         GROUP BY TABLE_SCHEMA`,
+        undefined, 'databases'
+      ).catch(() => ({ rows: [], fields: [] })),
+    ]);
 
-          // Split counts by TABLE_TYPE, excluding MVs from table count
-          let tableCount = 0;
-          let viewCount = 0;
-          const mvCount = mvNames.size;
-          for (const row of tables.rows) {
-            const tableType = String((row as Record<string, unknown>)['TABLE_TYPE'] || '').toUpperCase();
-            const tableName = String((row as Record<string, unknown>)['TABLE_NAME'] || '');
-            if (tableType === 'VIEW' || tableType === 'SYSTEM VIEW') {
-              viewCount++;
-            } else if (mvNames.has(tableName)) {
-              // Already counted in mvCount, skip
-            } else {
-              tableCount++;
-            }
-          }
-          return { name: dbName, tableCount, viewCount, mvCount, tables: tables.rows };
-        } catch {
-          return { name: dbName, tableCount: 0, viewCount: 0, mvCount: 0, tables: [] };
-        }
-      })
-    );
+    // 3) Build counts map from aggregated results
+    // tableCountMap[schema] = { tables: N, views: N }
+    const countMap = new Map<string, { tables: number; views: number }>();
+    for (const row of tableAgg.rows as Record<string, unknown>[]) {
+      const schema = String(row['TABLE_SCHEMA'] || '');
+      const tableType = String(row['TABLE_TYPE'] || '').toUpperCase();
+      const cnt = Number(row['cnt'] || 0);
+      if (!countMap.has(schema)) countMap.set(schema, { tables: 0, views: 0 });
+      const entry = countMap.get(schema)!;
+      if (tableType === 'VIEW' || tableType === 'SYSTEM VIEW') {
+        entry.views += cnt;
+      } else {
+        entry.tables += cnt;
+      }
+    }
+
+    // mvCountMap[schema] = N
+    const mvCountMap = new Map<string, number>();
+    for (const row of mvAgg.rows as Record<string, unknown>[]) {
+      const schema = String(row['TABLE_SCHEMA'] || '');
+      const cnt = Number(row['cnt'] || 0);
+      mvCountMap.set(schema, cnt);
+    }
+
+    // 4) Assemble final result (subtract MV count from table count since MVs show as BASE TABLE)
+    const dbDetails = dbNames.map(name => {
+      const counts = countMap.get(name) || { tables: 0, views: 0 };
+      const mvCount = mvCountMap.get(name) || 0;
+      return {
+        name,
+        tableCount: Math.max(0, counts.tables - mvCount), // MVs are counted as BASE TABLE, subtract
+        viewCount: counts.views,
+        mvCount,
+        tables: [],
+      };
+    });
 
     // Persist to SQLite cache
     let cachedAt: string | undefined;
     try {
       upsertDbCache(sessionId, dbDetails.map(d => ({ name: d.name, tableCount: d.tableCount, viewCount: d.viewCount, mvCount: d.mvCount })));
-      // Use the first cached_at as the representative timestamp
       const cached = getDbCache(sessionId);
       cachedAt = cached[0]?.cached_at;
     } catch {
       // non-fatal
     }
-
-    // Also store full list in blob cache (reuse same key pattern via setBlobCache for consistency)
-    try {
-      setBlobCache('users_cache', `__dbs_${sessionId}`, null); // not needed, db_metadata_cache handles it
-    } catch { /* ignore */ }
 
     return NextResponse.json({ databases: dbDetails, cachedAt, fromCache: false });
   } catch (err) {
@@ -106,3 +112,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

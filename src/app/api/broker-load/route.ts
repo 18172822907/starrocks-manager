@@ -1,6 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
 import { getBlobCache, setBlobCache } from '@/lib/local-db';
+import { escapeBacktickId, escapeSqlString } from '@/lib/sql-sanitize';
+
+/**
+ * Map information_schema.loads column names (UPPER_SNAKE_CASE)
+ * to the SHOW LOAD column names (CamelCase) expected by the frontend.
+ */
+function mapColumns(row: Record<string, unknown>): Record<string, unknown> {
+  const mapped: Record<string, unknown> = {};
+  const aliasMap: Record<string, string> = {
+    'LABEL': 'Label',
+    'DATABASE_NAME': 'DbName',
+    'STATE': 'State',
+    'TYPE': 'Type',
+    'PROGRESS': 'Progress',
+    'CREATE_TIME': 'CreateTime',
+    'LOAD_START_TIME': 'LoadStartTime',
+    'LOAD_FINISH_TIME': 'LoadFinishTime',
+    'URL': 'URL',
+    'TRACKING_URL': 'TrackingUrl',
+    'TRACKING_SQL': 'TrackingSql',
+    'ETL_INFO': 'EtlInfo',
+    'TASK_INFO': 'TaskInfo',
+    'ERROR_MSG': 'ErrorMsg',
+    'JOB_ID': 'JobId',
+    'PROPERTIES': 'Properties',
+  };
+
+  for (const [key, value] of Object.entries(row)) {
+    const alias = aliasMap[key];
+    if (alias) {
+      mapped[alias] = value;
+    }
+    mapped[key] = value;
+  }
+  return mapped;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,28 +54,21 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const dbResult = await executeQuery(sessionId, 'SHOW DATABASES');
-    const databases = (dbResult.rows as Record<string, unknown>[]).map(r =>
-      String(r['Database'] || r['database'] || Object.values(r)[0] || '')
-    ).filter(d => d && !['information_schema', '_statistics_', 'starrocks_monitor'].includes(d));
+    // Single query via information_schema.loads — replaces the old N+1 pattern
+    // (was: SHOW DATABASES + SHOW LOAD FROM `db` for each database)
+    // Filter TYPE = 'BROKER' to only show broker load jobs.
+    const result = await executeQuery(
+      sessionId,
+      `SELECT * FROM information_schema.loads WHERE TYPE = 'BROKER' ORDER BY CREATE_TIME DESC LIMIT 500`,
+      undefined,
+      'broker-load'
+    );
 
-    const allLoads: Record<string, unknown>[] = [];
-
-    for (const db of databases) {
-      try {
-        const result = await executeQuery(sessionId, `SHOW LOAD FROM \`${db}\` ORDER BY CreateTime DESC LIMIT 50`);
-        const rows = result.rows as Record<string, unknown>[];
-        for (const row of rows) {
-          allLoads.push({ ...row, _db: db });
-        }
-      } catch { /* skip */ }
-    }
-
-    // Sort by CreateTime desc
-    allLoads.sort((a, b) => {
-      const ta = String(a['CreateTime'] || '');
-      const tb = String(b['CreateTime'] || '');
-      return tb.localeCompare(ta);
+    const rows = result.rows as Record<string, unknown>[];
+    const allLoads = rows.map(row => {
+      const mapped = mapColumns(row);
+      mapped._db = String(mapped['DbName'] || mapped['DATABASE_NAME'] || '');
+      return mapped;
     });
 
     let cachedAt: string | undefined;
@@ -63,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'cancel') {
       if (!label || !dbName) return NextResponse.json({ error: 'Label and DB required' }, { status: 400 });
-      await executeQuery(sessionId, `CANCEL LOAD FROM \`${dbName}\` WHERE LABEL = '${label}'`);
+      await executeQuery(sessionId, `CANCEL LOAD FROM \`${escapeBacktickId(dbName)}\` WHERE LABEL = '${escapeSqlString(label)}'`, undefined, 'broker-load');
       return NextResponse.json({ success: true });
     }
 

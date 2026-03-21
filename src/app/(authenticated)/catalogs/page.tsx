@@ -3,9 +3,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { usePagination } from '@/hooks/usePagination';
-import { Pagination } from '@/components/ui';
+import { Pagination, CommandLogButton} from '@/components/ui';
 import { Modal } from '@/components/ui/Modal';
-import SqlHighlighter from '@/components/SqlHighlighter';
+import dynamic from 'next/dynamic';
+const SqlHighlighter = dynamic(() => import('@/components/SqlHighlighter'), { ssr: false });
+import Breadcrumb from '@/components/Breadcrumb';
 import {
   FolderTree, RefreshCw, Search, Clock, Plus,
   Eye, Trash2, Copy, Check, AlertTriangle,
@@ -179,15 +181,16 @@ export default function CatalogsPage() {
   return (
     <>
       <div className="page-header">
+        <Breadcrumb items={[{ label: '数据管理' }, { label: 'Catalog 管理' }]} />
         <div className="page-header-row">
           <div>
             <h1 className="page-title">Catalog 管理</h1>
             <p className="page-description">
               管理 StarRocks 数据目录 · {catalogs.length} 个 Catalog
               {lastRefreshed && (
-                <span style={{ marginLeft: '8px', opacity: 0.6, fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <span className="timestamp-hint">
                   <Clock size={11} /> {fromCache ? '缓存时间：' : '刷新时间：'}{lastRefreshed}
-                  {fromCache && <span style={{ marginLeft: '4px', padding: '1px 6px', borderRadius: '999px', fontSize: '0.68rem', backgroundColor: 'rgba(234,179,8,0.12)', color: 'var(--warning-600)', fontWeight: 600 }}>CACHE</span>}
+                  {fromCache && <span className="badge-cache">CACHE</span>}
                 </span>
               )}
             </p>
@@ -196,6 +199,7 @@ export default function CatalogsPage() {
             <button className="btn btn-primary" onClick={() => { setCreateModal(true); setActionError(''); setCreateSql(''); }}>
               <Plus size={16} /> 创建 Catalog
             </button>
+            <CommandLogButton source="catalogs" title="Catalog 管理" />
             <button className="btn btn-secondary" onClick={() => fetchCatalogs(true)} disabled={loading || refreshing}>
               <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
             </button>
@@ -205,9 +209,7 @@ export default function CatalogsPage() {
 
       <div className="page-body">
         {error && (
-          <div style={{ color: 'var(--danger-500)', marginBottom: '16px', padding: '10px 14px', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
-            {error}
-          </div>
+          <div className="error-banner">{error}</div>
         )}
 
         <div className="search-bar mb-4">
@@ -235,7 +237,7 @@ export default function CatalogsPage() {
                   </th>
                   <th>类型</th>
                   <th>备注</th>
-                  <th style={{ textAlign: 'center', width: '200px' }}>操作</th>
+                  <th style={{ textAlign: 'center', width: '120px' }}>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -286,25 +288,19 @@ export default function CatalogsPage() {
                       <td>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                           <button
-                            className="btn btn-sm"
-                            style={{ color: 'var(--primary-600)', borderColor: 'var(--primary-200)', backgroundColor: 'var(--primary-50)' }}
+                            className="btn-action btn-action-view"
                             onClick={() => openViewModal(name)}
+                            title="查看 DDL"
                           >
-                            <Eye size={14} /> 查看
+                            <Eye size={14} />
                           </button>
                           <button
-                            className="btn btn-sm"
-                            style={{
-                              color: isDefault ? 'var(--text-tertiary)' : 'var(--danger-500)',
-                              borderColor: isDefault ? 'var(--border-secondary)' : 'rgba(239,68,68,0.3)',
-                              backgroundColor: isDefault ? 'var(--bg-secondary)' : 'rgba(239,68,68,0.05)',
-                              cursor: isDefault ? 'not-allowed' : 'pointer',
-                              opacity: isDefault ? 0.5 : 1,
-                            }}
+                            className="btn-action btn-action-danger"
                             disabled={isDefault}
                             onClick={() => { setDeleteModal({ open: true, name }); setActionError(''); }}
+                            title={isDefault ? '默认 Catalog 不可删除' : '删除 Catalog'}
                           >
-                            <Trash2 size={14} /> 删除
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
@@ -314,15 +310,14 @@ export default function CatalogsPage() {
               </tbody>
             </table>
 
-            <div style={{
-              padding: '10px 16px', borderTop: '1px solid var(--border-secondary)',
-              fontSize: '0.78rem', color: 'var(--text-tertiary)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
-            }}>
-              <span>
-                共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个 Catalog
-                {search && ` (过滤自 ${catalogs.length} 个)`}
-              </span>
+            <div className="table-footer">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span>
+                  共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个 Catalog
+                  {search && ` (过滤自 ${catalogs.length} 个)`}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> SHOW CATALOGS</span>
+              </div>
               <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
             </div>
           </div>

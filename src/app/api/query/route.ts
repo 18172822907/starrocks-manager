@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const trimmed = sql.trim().replace(/;\s*$/, '');
 
     const startTime = Date.now();
-    const result = await executeQuery(sessionId, trimmed);
+    const result = await executeQuery(sessionId, trimmed, undefined, 'query');
     const duration = Date.now() - startTime;
 
     return NextResponse.json({

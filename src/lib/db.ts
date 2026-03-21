@@ -1,5 +1,5 @@
 import mysql, { Pool, PoolOptions, RowDataPacket } from 'mysql2/promise';
-import { listConnections } from './local-db';
+import { listConnections, appendCommandLog } from './local-db';
 
 // Store active connection pools by session (preserve across Next.js HMR)
 const globalForDb = globalThis as unknown as { __starrocksPools?: Map<string, Pool> };
@@ -83,7 +83,8 @@ async function recreatePool(sessionId: string): Promise<Pool | null> {
 export async function executeQuery<T extends RowDataPacket[] = RowDataPacket[]>(
   sessionId: string,
   sql: string,
-  params?: unknown[]
+  params?: unknown[],
+  source?: string,
 ): Promise<{ rows: T; fields: { name: string; type: number }[] }> {
   let pool = getPool(sessionId);
   if (!pool) {
@@ -94,10 +95,17 @@ export async function executeQuery<T extends RowDataPacket[] = RowDataPacket[]>(
     }
   }
 
+  const startTime = Date.now();
+
   // Try query, retry once on connection errors
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const [rows, fields] = await pool.query<T>(sql, params);
+      const durationMs = Date.now() - startTime;
+      // Log to command_log if source is provided
+      if (source) {
+        appendCommandLog(sessionId, source, sql, 'success', Array.isArray(rows) ? rows.length : 0, durationMs);
+      }
       return {
         rows,
         fields: fields?.map(f => ({ name: f.name, type: f.type ?? 0 })) || [],
@@ -120,6 +128,11 @@ export async function executeQuery<T extends RowDataPacket[] = RowDataPacket[]>(
           pool = newPool;
           continue; // retry
         }
+      }
+      // Log error if source is provided
+      if (source) {
+        const durationMs = Date.now() - startTime;
+        appendCommandLog(sessionId, source, sql, 'error', 0, durationMs, msg);
       }
       throw err;
     }

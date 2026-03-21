@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { usePagination } from '@/hooks/usePagination';
-import { Pagination } from '@/components/ui';
+import { Pagination, CommandLogButton} from '@/components/ui';
 import PrivilegeDetailModal, { CatalogSectionBlock } from '@/components/PrivilegeDetailModal';
 import SearchableSelect from '@/components/SearchableSelect';
+import Breadcrumb from '@/components/Breadcrumb';
 import { classifyGrants, type CatalogGrant } from '@/utils/grantClassifier';
 import {
   Users, Plus, Trash2, RefreshCw, Search, X,
@@ -74,6 +75,8 @@ export default function UsersPage() {
   const [grantDbs, setGrantDbs] = useState<string[]>([]);
   const [grantTables, setGrantTables] = useState<string[]>([]);
   const [grantSubmitting, setGrantSubmitting] = useState(false);
+  const [quickRevoking, setQuickRevoking] = useState(false);
+  const grantDirtyRef = useRef(false);
   const [grantExisting, setGrantExisting] = useState<import('@/utils/grantClassifier').CatalogGroup[]>([]);
   const [grantExistingOpen, setGrantExistingOpen] = useState(false);
   // 10-min client-side metadata cache
@@ -172,7 +175,7 @@ export default function UsersPage() {
       });
       const data = await res.json();
       if (data.error) setError(data.error);
-      else { setShowCreate(false); setForm(DEFAULT_FORM); setSuccess('用户创建成功'); fetchUsers(); }
+      else { setShowCreate(false); setForm(DEFAULT_FORM); setSuccess('已创建'); fetchUsers(); }
     } catch (err) { setError(String(err)); }
     finally { setCreating(false); }
   }
@@ -193,7 +196,7 @@ export default function UsersPage() {
       });
       const data = await res.json();
       if (data.error) setError(data.error);
-      else { setSuccess('用户已删除'); fetchUsers(); }
+      else { setSuccess('已删除'); fetchUsers(); }
     } catch (err) { setError(String(err)); }
     finally { setDeleteConfirm(null); }
   }
@@ -209,41 +212,118 @@ export default function UsersPage() {
 
   const SYSTEM_USERS = new Set(['root', 'starrocks']);
 
-  // ── Privilege category → available privileges ──
-  const PRIV_OPTIONS: Record<string, { label: string; value: string }[]> = {
-    system: [
-      { label: 'OPERATE', value: 'OPERATE' },
-      { label: 'NODE', value: 'NODE' },
-      { label: 'CREATE RESOURCE GROUP', value: 'CREATE RESOURCE GROUP' },
-    ],
-    ddl: [
+  // ── Privilege category → available privileges (scope-aware) ──
+  // StarRocks privilege rules:
+  //   DATABASE scope: ALTER, DROP, CREATE TABLE, CREATE VIEW, CREATE MATERIALIZED VIEW, CREATE FUNCTION
+  //   TABLE scope:    SELECT, INSERT, UPDATE, DELETE, ALTER, DROP, EXPORT
+  //   VIEW scope:     SELECT, ALTER, DROP
+  //   MV scope:       SELECT, ALTER, DROP, REFRESH
+  const DDL_PRIVS_BY_SCOPE: Record<string, { label: string; value: string }[]> = {
+    database: [
       { label: 'CREATE TABLE', value: 'CREATE TABLE' },
       { label: 'CREATE VIEW', value: 'CREATE VIEW' },
       { label: 'CREATE MV', value: 'CREATE MATERIALIZED VIEW' },
-      { label: 'CREATE DATABASE', value: 'CREATE DATABASE' },
+      { label: 'ALTER', value: 'ALTER' },
+      { label: 'DROP', value: 'DROP' },
+    ],
+    all_table: [
+      { label: 'ALTER', value: 'ALTER' },
+      { label: 'DROP', value: 'DROP' },
+    ],
+    specific_table: [
+      { label: 'ALTER', value: 'ALTER' },
+      { label: 'DROP', value: 'DROP' },
+      { label: 'EXPORT', value: 'EXPORT' },
+    ],
+    all_view: [
+      { label: 'ALTER', value: 'ALTER' },
+      { label: 'DROP', value: 'DROP' },
+    ],
+    specific_view: [
+      { label: 'ALTER', value: 'ALTER' },
+      { label: 'DROP', value: 'DROP' },
+    ],
+    all_mv: [
       { label: 'ALTER', value: 'ALTER' },
       { label: 'DROP', value: 'DROP' },
       { label: 'REFRESH', value: 'REFRESH' },
     ],
-    dml: [
+    specific_mv: [
+      { label: 'ALTER', value: 'ALTER' },
+      { label: 'DROP', value: 'DROP' },
+      { label: 'REFRESH', value: 'REFRESH' },
+    ],
+  };
+
+  const DML_PRIVS_BY_SCOPE: Record<string, { label: string; value: string }[]> = {
+    database: [
+      { label: 'SELECT', value: 'SELECT' },
+      { label: 'INSERT', value: 'INSERT' },
+      { label: 'UPDATE', value: 'UPDATE' },
+      { label: 'DELETE', value: 'DELETE' },
+    ],
+    all_table: [
+      { label: 'SELECT', value: 'SELECT' },
+      { label: 'INSERT', value: 'INSERT' },
+      { label: 'UPDATE', value: 'UPDATE' },
+      { label: 'DELETE', value: 'DELETE' },
+    ],
+    specific_table: [
       { label: 'SELECT', value: 'SELECT' },
       { label: 'INSERT', value: 'INSERT' },
       { label: 'UPDATE', value: 'UPDATE' },
       { label: 'DELETE', value: 'DELETE' },
       { label: 'EXPORT', value: 'EXPORT' },
     ],
-    function: [
-      { label: 'USAGE', value: 'USAGE' },
-      { label: 'CREATE FUNCTION', value: 'CREATE FUNCTION' },
-      { label: 'DROP', value: 'DROP' },
+    all_view: [
+      { label: 'SELECT', value: 'SELECT' },
     ],
-    catalog: [
-      { label: 'USAGE', value: 'USAGE' },
-      { label: 'CREATE DATABASE', value: 'CREATE DATABASE' },
-      { label: 'DROP', value: 'DROP' },
-      { label: 'ALTER', value: 'ALTER' },
+    specific_view: [
+      { label: 'SELECT', value: 'SELECT' },
+    ],
+    all_mv: [
+      { label: 'SELECT', value: 'SELECT' },
+    ],
+    specific_mv: [
+      { label: 'SELECT', value: 'SELECT' },
     ],
   };
+
+  function getPrivOptions(): { label: string; value: string }[] {
+    if (grantCategory === 'system') {
+      return [
+        { label: 'OPERATE', value: 'OPERATE' },
+        { label: 'NODE', value: 'NODE' },
+        { label: 'CREATE RESOURCE GROUP', value: 'CREATE RESOURCE GROUP' },
+      ];
+    }
+    if (grantCategory === 'catalog') {
+      return [
+        { label: 'USAGE', value: 'USAGE' },
+        { label: 'CREATE DATABASE', value: 'CREATE DATABASE' },
+        { label: 'DROP', value: 'DROP' },
+        { label: 'ALTER', value: 'ALTER' },
+      ];
+    }
+    if (grantCategory === 'function') {
+      return [
+        { label: 'USAGE', value: 'USAGE' },
+        { label: 'CREATE FUNCTION', value: 'CREATE FUNCTION' },
+        { label: 'DROP', value: 'DROP' },
+      ];
+    }
+    // DDL or DML — scope-aware
+    const scopeKey = grantScope === 'database' ? 'database' : (grantObjType || 'all_table');
+    if (grantCategory === 'ddl') {
+      return DDL_PRIVS_BY_SCOPE[scopeKey] || DDL_PRIVS_BY_SCOPE['database'];
+    }
+    if (grantCategory === 'dml') {
+      return DML_PRIVS_BY_SCOPE[scopeKey] || DML_PRIVS_BY_SCOPE['all_table'];
+    }
+    return [];
+  }
+
+  const PRIV_OPTIONS = getPrivOptions();
 
   const CATEGORY_META_UI: Record<string, { label: string; color: string; bg: string }> = {
     system:   { label: '系统', color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)' },
@@ -264,6 +344,7 @@ export default function UsersPage() {
     setGrantSubmitting(false);
     setGrantExisting([]);
     setGrantExistingOpen(false);
+    grantDirtyRef.current = false;
     setGrantTables([]);
     // Load catalogs + existing privileges + default_catalog databases
     if (session) {
@@ -386,10 +467,46 @@ export default function UsersPage() {
       return `${action} ${privStr} ON GLOBAL FUNCTION ${grantSpecific || '...'} ${toFrom} ${showGrant}`;
     }
     // DDL / DML — 2 scopes: database | object
+    // StarRocks rules:
+    //   DDL (CREATE TABLE etc.) → ON DATABASE db
+    //   DML (SELECT etc.) → ON ALL TABLES IN DATABASE db (cannot be granted directly ON DATABASE)
+    const DDL_SET = new Set(['CREATE TABLE', 'CREATE VIEW', 'CREATE MATERIALIZED VIEW', 'ALTER', 'DROP', 'CREATE FUNCTION']);
+    const catalogOnlyPrivs = ['CREATE DATABASE'];
     if (grantScope === 'database') {
       const dbs = Array.from(grantDbMulti);
       if (dbs.length === 0) return '';
-      return dbs.map(db => `${action} ${privStr} ON DATABASE ${db} ${toFrom} ${showGrant}`).join('; ');
+      const selectedPrivs = Array.from(grantPrivs).filter(p => !catalogOnlyPrivs.includes(p));
+      if (selectedPrivs.length === 0) return '';
+      const ddlPrivs = selectedPrivs.filter(p => DDL_SET.has(p));
+      const dmlPrivs = selectedPrivs.filter(p => !DDL_SET.has(p));
+      const stmts: string[] = [];
+      for (const db of dbs) {
+        if (ddlPrivs.length > 0) {
+          stmts.push(`${action} ${ddlPrivs.join(', ')} ON DATABASE ${db} ${toFrom} ${showGrant}`);
+        }
+        if (dmlPrivs.length > 0) {
+          // SELECT applies to tables, views, AND MVs
+          // INSERT/UPDATE/DELETE apply only to tables
+          const tableOnlyDml = dmlPrivs.filter(p => p !== 'SELECT');
+          const hasSelect = dmlPrivs.includes('SELECT');
+          if (tableOnlyDml.length > 0) {
+            // table-only + SELECT combined → ALL TABLES
+            const tablePrivs = hasSelect ? ['SELECT', ...tableOnlyDml] : tableOnlyDml;
+            stmts.push(`${action} ${tablePrivs.join(', ')} ON ALL TABLES IN DATABASE ${db} ${toFrom} ${showGrant}`);
+            // SELECT also needs views and MVs
+            if (hasSelect) {
+              stmts.push(`${action} SELECT ON ALL VIEWS IN DATABASE ${db} ${toFrom} ${showGrant}`);
+              stmts.push(`${action} SELECT ON ALL MATERIALIZED VIEWS IN DATABASE ${db} ${toFrom} ${showGrant}`);
+            }
+          } else if (hasSelect) {
+            // SELECT only → all three object types
+            stmts.push(`${action} SELECT ON ALL TABLES IN DATABASE ${db} ${toFrom} ${showGrant}`);
+            stmts.push(`${action} SELECT ON ALL VIEWS IN DATABASE ${db} ${toFrom} ${showGrant}`);
+            stmts.push(`${action} SELECT ON ALL MATERIALIZED VIEWS IN DATABASE ${db} ${toFrom} ${showGrant}`);
+          }
+        }
+      }
+      return stmts.join('; ');
     }
     if (grantScope === 'object') {
       if (!grantDb) return '';
@@ -408,24 +525,61 @@ export default function UsersPage() {
 
   async function handleGrantSubmit(action: 'GRANT' | 'REVOKE') {
     if (!session || !showGrant) return;
-    const sql = buildGrantSQL(action);
-    if (!sql) return;
+    const sqlFull = buildGrantSQL(action);
+    if (!sqlFull) return;
     setGrantSubmitting(true);
+    setError('');
+    try {
+      // Split multiple statements and execute one by one
+      const stmts = sqlFull.split(';').map(s => s.trim()).filter(Boolean);
+      for (const sql of stmts) {
+        const res = await fetch('/api/query', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.sessionId, sql }),
+        });
+        const data = await res.json();
+        if (data.error) { setError(data.error); return; }
+      }
+      setSuccess('授权成功');
+      grantDirtyRef.current = true;
+      setShowGrant(null);
+      fetchUsers(true);
+    } catch (err) { setError(String(err)); }
+    finally { setGrantSubmitting(false); }
+  }
+
+  async function handleQuickRevoke(rawGrant: string) {
+    if (!session || !showGrant) return;
+    // Convert "GRANT ... TO 'user'@'%'" to "REVOKE ... FROM 'user'@'%'"
+    const revokeSQL = rawGrant.replace(/^GRANT\b/i, 'REVOKE').replace(/\bTO\b/i, 'FROM');
+    setQuickRevoking(true);
     setError('');
     try {
       const res = await fetch('/api/query', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.sessionId, sql }),
+        body: JSON.stringify({ sessionId: session.sessionId, sql: revokeSQL }),
       });
       const data = await res.json();
-      if (data.error) setError(data.error);
-      else {
-        setSuccess(`${action === 'GRANT' ? '授权' : '撤销'}成功`);
-        setShowGrant(null);
-        fetchUsers(true);
+      if (data.error) { setError(data.error); return; }
+      setSuccess('已撤销');
+      grantDirtyRef.current = true;
+      // Refresh existing privileges in modal + main table
+      const gRes = await fetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(showGrant)}`);
+      const gData = await gRes.json();
+      if (gData.grants) {
+        setGrantExisting(classifyGrants(gData.grants, gData.catalogGrants));
       }
     } catch (err) { setError(String(err)); }
-    finally { setGrantSubmitting(false); }
+    finally { setQuickRevoking(false); }
+  }
+
+  function closeGrantModal() {
+    if (grantSubmitting || quickRevoking) return;
+    setShowGrant(null);
+    if (grantDirtyRef.current) {
+      fetchUsers(true);
+      grantDirtyRef.current = false;
+    }
   }
 
   async function handleRoleSubmit() {
@@ -458,7 +612,7 @@ export default function UsersPage() {
       for (const r of results) { const d = await r.json(); if (d.error) errors.push(d.error); }
       if (errors.length) setError(errors.join('; '));
       else {
-        setSuccess(`角色变更完成（${ops.length} 项）`);
+        setSuccess('角色已更新');
         setShowRoleAssign(null);
         fetchUsers(true);
       }
@@ -490,25 +644,27 @@ export default function UsersPage() {
   return (
     <>
       <div className="page-header">
+        <Breadcrumb items={[{ label: '权限管理' }, { label: '用户管理' }]} />
         <div className="page-header-row">
           <div>
             <h1 className="page-title">用户管理</h1>
             <p className="page-description">
               管理 StarRocks 数据库用户 · {users.length} 个用户
               {lastRefreshed && (
-                <span style={{ marginLeft: '8px', opacity: 0.6, fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <span className="timestamp-hint">
                   <Clock size={11} /> {fromCache ? '缓存时间：' : '刷新时间：'}{lastRefreshed}
-                  {fromCache && <span style={{ marginLeft: '4px', padding: '1px 6px', borderRadius: '999px', fontSize: '0.68rem', backgroundColor: 'rgba(234,179,8,0.12)', color: 'var(--warning-600)', fontWeight: 600 }}>CACHE</span>}
+                  {fromCache && <span className="badge-cache">CACHE</span>}
                 </span>
               )}
             </p>
           </div>
           <div className="flex gap-2">
-            <button className="btn btn-secondary" onClick={() => fetchUsers(true)} disabled={loading || refreshing}>
-              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
-            </button>
             <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
               <Plus size={16} /> 创建用户
+            </button>
+            <CommandLogButton source="users" title="用户管理" />
+            <button className="btn btn-secondary" onClick={() => fetchUsers(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
             </button>
           </div>
         </div>
@@ -516,11 +672,9 @@ export default function UsersPage() {
 
       <div className="page-body">
         {error && (
-          <div style={{ color: 'var(--danger-500)', marginBottom: '16px', padding: '10px 14px', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
-            {error}
-          </div>
+          <div className="error-banner">{error}</div>
         )}
-        {success && <div className="toast toast-success">{success}</div>}
+        {success && <span className="success-flash">✓ {success}</span>}
 
         <div className="search-bar mb-4">
           <Search />
@@ -584,13 +738,7 @@ export default function UsersPage() {
                       {/* Username */}
                       <td>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{
-                            width: '28px', height: '28px', borderRadius: 'var(--radius-md)',
-                            backgroundColor: isSystem ? 'rgba(139,92,246,0.1)' : 'rgba(37,99,235,0.08)',
-                            color: isSystem ? 'var(--accent-600)' : 'var(--primary-600)',
-                            borderWidth: '1px', borderStyle: 'solid', borderColor: isSystem ? 'rgba(139,92,246,0.2)' : 'rgba(37,99,235,0.2)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                          }}>
+                          <div className={`icon-box icon-box-sm ${isSystem ? 'icon-box-accent' : 'icon-box-primary'}`}>
                             <Users size={13} />
                           </div>
                           <code style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>
@@ -698,56 +846,29 @@ export default function UsersPage() {
                       <td>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
                           <button
+                            className={`btn-action ${isSystem ? '' : 'btn-action-view'}`}
                             disabled={isSystem}
                             onClick={() => !isSystem && openGrantModal(u.identity)}
                             title={isSystem ? '系统用户请通过命令行管理' : '授权'}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '4px',
-                              padding: '3px 10px', borderRadius: '6px', fontSize: '0.75rem',
-                              border: `1px solid ${isSystem ? 'var(--border-secondary)' : 'var(--primary-200)'}`,
-                              backgroundColor: isSystem ? 'transparent' : 'var(--primary-50)',
-                              color: isSystem ? 'var(--text-tertiary)' : 'var(--primary-600)',
-                              cursor: isSystem ? 'not-allowed' : 'pointer',
-                              transition: 'all 0.15s',
-                              fontWeight: 500, whiteSpace: 'nowrap',
-                              opacity: isSystem ? 0.4 : 1,
-                            }}
+                            style={isSystem ? { opacity: 0.4, cursor: 'not-allowed', backgroundColor: 'transparent', borderColor: 'var(--border-secondary)', color: 'var(--text-tertiary)' } : undefined}
                           >
-                            <Shield size={12} /> 授权
+                            <Shield size={14} />
                           </button>
                           <button
+                            className={`btn-action ${isSystem ? '' : 'btn-action-teal'}`}
                             disabled={isSystem}
                             onClick={() => !isSystem && openRoleAssignModal(u.identity)}
                             title={isSystem ? '系统用户请通过命令行管理' : '分配角色'}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '4px',
-                              padding: '3px 10px', borderRadius: '6px', fontSize: '0.75rem',
-                              border: isSystem ? '1px solid var(--border-secondary)' : '1px solid rgba(20,184,166,0.3)',
-                              backgroundColor: isSystem ? 'transparent' : 'rgba(20,184,166,0.06)',
-                              color: isSystem ? 'var(--text-tertiary)' : '#0d9488',
-                              cursor: isSystem ? 'not-allowed' : 'pointer',
-                              transition: 'all 0.15s',
-                              fontWeight: 500, whiteSpace: 'nowrap',
-                              opacity: isSystem ? 0.4 : 1,
-                            }}
+                            style={isSystem ? { opacity: 0.4, cursor: 'not-allowed', backgroundColor: 'transparent', borderColor: 'var(--border-secondary)', color: 'var(--text-tertiary)' } : undefined}
                           >
-                            <UserPlus size={12} /> 角色
+                            <UserPlus size={14} />
                           </button>
-                          <span style={{ width: '1px', height: '16px', backgroundColor: 'var(--border-secondary)', margin: '0 2px' }} />
                           <button
-                            className="btn-ghost btn-icon"
+                            className={`btn-action ${isSystem ? '' : 'btn-action-danger'}`}
                             disabled={isSystem}
                             onClick={() => !isSystem && handleDelete(u.identity)}
                             title={isSystem ? '系统用户不可删除' : '删除用户'}
-                            style={{
-                              color: isSystem ? 'var(--text-quaternary, #d1d5db)' : 'var(--danger-400, #f87171)',
-                              padding: '4px', borderRadius: '6px',
-                              transition: 'all 0.15s',
-                              opacity: isSystem ? 0.3 : 0.7,
-                              cursor: isSystem ? 'not-allowed' : 'pointer',
-                            }}
-                            onMouseEnter={e => { if (!isSystem) { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--danger-500, #ef4444)'; e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.08)'; } }}
-                            onMouseLeave={e => { if (!isSystem) { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.color = 'var(--danger-400, #f87171)'; e.currentTarget.style.backgroundColor = 'transparent'; } }}
+                            style={isSystem ? { opacity: 0.4, cursor: 'not-allowed', backgroundColor: 'transparent', borderColor: 'var(--border-secondary)', color: 'var(--text-tertiary)' } : undefined}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -759,17 +880,16 @@ export default function UsersPage() {
               </tbody>
             </table>
 
-            <div style={{
-              padding: '10px 16px', borderTop: '1px solid var(--border-secondary)',
-              fontSize: '0.78rem', color: 'var(--text-tertiary)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
-            }}>
-              <span>
-                共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个用户
-                {search && ` (过滤自 ${users.length} 个)`}
-                <span style={{ marginLeft: '12px', color: 'var(--accent-600)' }}>系统 {systemCount}</span>
-                <span style={{ marginLeft: '8px', color: 'var(--primary-600)' }}>普通 {customCount}</span>
-              </span>
+            <div className="table-footer">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span>
+                  共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个用户
+                  {search && ` (过滤自 ${users.length} 个)`}
+                  <span style={{ marginLeft: '12px', color: 'var(--accent-600)' }}>系统 {systemCount}</span>
+                  <span style={{ marginLeft: '8px', color: 'var(--primary-600)' }}>普通 {customCount}</span>
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> SELECT * FROM mysql.user</span>
+              </div>
               <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
             </div>
           </div>
@@ -815,13 +935,20 @@ export default function UsersPage() {
 
         {/* Grant Privilege Modal - Wizard */}
         {showGrant && (
-          <div className="modal-overlay" onClick={() => setShowGrant(null)}>
+          <div className="modal-overlay" onClick={closeGrantModal}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '680px' }}>
               <div className="modal-header">
                 <div className="modal-title">权限授予 — {showGrant}</div>
-                <button className="btn-ghost btn-icon" onClick={() => setShowGrant(null)}><X size={18} /></button>
+                <button className="btn-ghost btn-icon" onClick={closeGrantModal} disabled={grantSubmitting || quickRevoking}><X size={18} /></button>
               </div>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '70vh', overflowY: 'auto' }}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '70vh', overflowY: 'auto', position: 'relative' }}>
+                {(grantSubmitting || quickRevoking) && (
+                  <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(1px)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      <span className="spinner" /> {grantSubmitting ? '授权执行中...' : '撤销中...'}
+                    </div>
+                  </div>
+                )}
                 {/* Step 1: Category */}
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginBottom: '6px', fontWeight: 600 }}>① 权限类型</div>
@@ -858,7 +985,7 @@ export default function UsersPage() {
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginBottom: '4px', fontWeight: 600 }}>② 具体权限</div>
                   <div className="priv-checks">
-                    {(PRIV_OPTIONS[grantCategory] || []).map(opt => (
+                    {PRIV_OPTIONS.map(opt => (
                       <label key={opt.value} className="priv-check-item">
                         <input
                           type="checkbox"
@@ -964,6 +1091,7 @@ export default function UsersPage() {
                               value={grantScope}
                               onChange={val => {
                                 setGrantScope(val);
+                                setGrantPrivs(new Set());
                                 setGrantSpecific('');
                                 setGrantDbMulti(new Set());
                                 setGrantSpecificMulti(new Set());
@@ -1018,6 +1146,7 @@ export default function UsersPage() {
                                   value={grantObjType}
                                   onChange={val => {
                                     setGrantObjType(val);
+                                    setGrantPrivs(new Set());
                                     setGrantSpecificMulti(new Set());
                                     setGrantTables([]);
                                     if (val.startsWith('specific_') && grantDb) {
@@ -1073,9 +1202,9 @@ export default function UsersPage() {
                       <ChevronDown size={14} style={{ marginLeft: 'auto', transform: grantExistingOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
                     </button>
                     {grantExistingOpen && (
-                      <div style={{ maxHeight: '180px', overflowY: 'auto', padding: '8px' }}>
+                      <div style={{ maxHeight: '220px', overflowY: 'auto', padding: '8px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          {grantExisting.map((cg, i) => <CatalogSectionBlock key={i} group={cg} />)}
+                          {grantExisting.map((cg, i) => <CatalogSectionBlock key={i} group={cg} onRevoke={handleQuickRevoke} revoking={quickRevoking} />)}
                         </div>
                       </div>
                     )}
@@ -1085,27 +1214,20 @@ export default function UsersPage() {
                 {/* SQL Preview */}
                 <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-secondary)' }}>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', marginBottom: '3px' }}>SQL 预览</div>
-                  <code style={{ fontSize: '0.77rem', color: 'var(--primary-600)', fontFamily: "'JetBrains Mono', monospace", wordBreak: 'break-all', lineHeight: 1.6 }}>
-                    {buildGrantSQL('GRANT') || '请选择权限和范围...'}
+                  <code style={{ fontSize: '0.77rem', color: 'var(--primary-600)', fontFamily: "'JetBrains Mono', monospace", wordBreak: 'break-all', lineHeight: 1.8, display: 'block', whiteSpace: 'pre-wrap' }}>
+                    {(buildGrantSQL('GRANT') || '请选择权限和范围...').split('; ').join(';\n')}
                   </code>
                 </div>
               </div>
               <div className="modal-footer" style={{ gap: '8px' }}>
-                <button className="btn btn-secondary" onClick={() => setShowGrant(null)}>取消</button>
-                <button
-                  className="btn"
-                  disabled={grantPrivs.size === 0 || grantSubmitting}
-                  style={{ backgroundColor: 'var(--danger-500, #ef4444)', color: '#fff', border: 'none' }}
-                  onClick={() => handleGrantSubmit('REVOKE')}
-                >
-                  {grantSubmitting ? <span className="spinner" /> : <ShieldOff size={14} />} REVOKE
-                </button>
+                <button className="btn btn-secondary" onClick={closeGrantModal} disabled={grantSubmitting || quickRevoking}>取消</button>
                 <button
                   className="btn btn-primary"
-                  disabled={grantPrivs.size === 0 || grantSubmitting}
+                  disabled={grantPrivs.size === 0 || !buildGrantSQL('GRANT') || grantSubmitting || quickRevoking}
                   onClick={() => handleGrantSubmit('GRANT')}
+                  style={{ minWidth: '120px' }}
                 >
-                  {grantSubmitting ? <span className="spinner" /> : <Shield size={14} />} GRANT
+                  {grantSubmitting ? <><span className="spinner" style={{ width: '14px', height: '14px' }} /> 执行中...</> : <><Shield size={14} /> GRANT</>}
                 </button>
               </div>
             </div>

@@ -3,11 +3,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { usePagination } from '@/hooks/usePagination';
-import { Pagination } from '@/components/ui';
+import { Pagination, CommandLogButton} from '@/components/ui';
 import {
   Code2, RefreshCw, Search, Clock, Filter, Globe, Database,
   ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react';
+import Breadcrumb from '@/components/Breadcrumb';
 
 type SortDir = 'asc' | 'desc';
 
@@ -95,6 +96,7 @@ export default function FunctionsPage() {
   return (
     <>
       <div className="page-header">
+        <Breadcrumb items={[{ label: '系统管理' }, { label: '函数管理' }]} />
         <div className="page-header-row">
           <div>
             <h1 className="page-title">函数管理</h1>
@@ -108,9 +110,12 @@ export default function FunctionsPage() {
               )}
             </p>
           </div>
-          <button className="btn btn-secondary" onClick={() => fetchFunctions(true)} disabled={loading || refreshing}>
-            <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
-          </button>
+          <div className="flex gap-2">
+            <CommandLogButton source="functions" title="函数管理" />
+            <button className="btn btn-secondary" onClick={() => fetchFunctions(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -261,10 +266,13 @@ export default function FunctionsPage() {
               fontSize: '0.78rem', color: 'var(--text-tertiary)',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
             }}>
-              <span>
-                共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个函数
-                {(search || typeFilter !== 'all' || scopeFilter !== 'all') && ` (过滤自 ${functions.length} 个)`}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span>
+                  共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个函数
+                  {(search || typeFilter !== 'all' || scopeFilter !== 'all') && ` (过滤自 ${functions.length} 个)`}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> SHOW FUNCTIONS</span>
+              </div>
               <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
             </div>
           </div>

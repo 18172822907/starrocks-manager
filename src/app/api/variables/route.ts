@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
 import { getBlobCache, setBlobCache } from '@/lib/local-db';
+import { validateVarName, escapeSqlString } from '@/lib/sql-sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     }
 
     const sql = scope === 'global' ? 'SHOW GLOBAL VARIABLES' : 'SHOW VARIABLES';
-    const result = await executeQuery(sessionId, sql);
+    const result = await executeQuery(sessionId, sql, undefined, 'variables');
     const variables = result.rows;
 
     let cachedAt: string | undefined;
@@ -46,11 +47,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session ID and variable name required' }, { status: 400 });
     }
 
+    const safeName = validateVarName(name);
     const sql = global
-      ? `SET GLOBAL ${name} = ${typeof value === 'string' ? `'${value}'` : value}`
-      : `SET ${name} = ${typeof value === 'string' ? `'${value}'` : value}`;
+      ? `SET GLOBAL ${safeName} = ${typeof value === 'string' ? `'${escapeSqlString(value)}'` : Number(value)}`
+      : `SET ${safeName} = ${typeof value === 'string' ? `'${escapeSqlString(value)}'` : Number(value)}`;
 
-    await executeQuery(sessionId, sql);
+    await executeQuery(sessionId, sql, undefined, 'variables');
     return NextResponse.json({ success: true, sql });
   } catch (err) {
     return NextResponse.json(

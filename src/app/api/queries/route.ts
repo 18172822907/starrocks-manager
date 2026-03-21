@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
+import { validateNumeric } from '@/lib/sql-sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
     }
 
-    const result = await executeQuery(sessionId, 'SHOW PROCESSLIST');
+    const result = await executeQuery(sessionId, 'SHOW PROCESSLIST', undefined, 'dashboard');
     return NextResponse.json({ queries: result.rows });
   } catch (err) {
     return NextResponse.json(
@@ -25,7 +26,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Session ID and query ID required' }, { status: 400 });
     }
 
-    await executeQuery(sessionId, `KILL ${queryId}`);
+    const safeId = validateNumeric(queryId, 'queryId');
+    await executeQuery(sessionId, `KILL ${safeId}`, undefined, 'dashboard');
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json(

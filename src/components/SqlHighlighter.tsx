@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 
 // SQL keywords to highlight
 const SQL_KEYWORDS = new Set([
@@ -36,6 +36,8 @@ interface SqlHighlighterProps {
   showLineNumbers?: boolean;
   showFormatToggle?: boolean;
   maxHeight?: string;
+  showToolbar?: boolean;
+  externalFormatted?: boolean;
   onCopy?: () => void;
   copied?: boolean;
 }
@@ -46,10 +48,32 @@ export default function SqlHighlighter({
   showLineNumbers = true,
   showFormatToggle = true,
   maxHeight = '600px',
+  showToolbar = true,
+  externalFormatted,
   onCopy,
   copied = false,
 }: SqlHighlighterProps) {
-  const [formatted, setFormatted] = useState(true);
+  const [internalFormatted, setFormatted] = useState(true);
+  const formatted = externalFormatted !== undefined ? externalFormatted : internalFormatted;
+  const [isDark, setIsDark] = useState(true);
+  const [internalCopied, setInternalCopied] = useState(false);
+
+  // Built-in copy handler when onCopy is not provided
+  const handleCopy = onCopy || (() => {
+    navigator.clipboard.writeText(sql);
+    setInternalCopied(true);
+    setTimeout(() => setInternalCopied(false), 2000);
+  });
+  const isCopied = onCopy ? copied : internalCopied;
+
+  // Detect theme from data-theme attribute
+  useEffect(() => {
+    const check = () => setIsDark(document.documentElement.getAttribute('data-theme') === 'dark');
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   const displaySql = useMemo(() => {
     return formatted ? formatSql(sql) : sql;
@@ -57,6 +81,7 @@ export default function SqlHighlighter({
 
   const lines = displaySql.split('\n');
   const tokens = useMemo(() => tokenize(displaySql), [displaySql]);
+  const theme = isDark ? darkTheme : lightTheme;
 
   // Build line→tokens mapping for line-by-line rendering
   const lineTokens = useMemo(() => {
@@ -90,30 +115,29 @@ export default function SqlHighlighter({
   return (
     <div style={{ position: 'relative', ...style }}>
       {/* Floating toolbar: copy + format toggle */}
-      {(showFormatToggle || onCopy) && (
+      {showToolbar && (
         <div style={{
           position: 'absolute',
           top: '6px',
-          right: '6px',
+          right: '20px',
           zIndex: 3,
           display: 'flex',
           gap: '4px',
         }}>
-          {onCopy && (
-            <button
-              onClick={onCopy}
-              style={{
-                padding: '3px 10px', borderRadius: '4px', fontSize: '0.72rem',
-                border: '1px solid rgba(255,255,255,0.1)',
-                backgroundColor: copied ? 'rgba(166,227,161,0.15)' : 'rgba(24,24,37,0.85)',
-                color: copied ? '#a6e3a1' : '#6c7086',
+          <button
+            onClick={handleCopy}
+            style={{
+              padding: '3px 10px', borderRadius: '4px', fontSize: '0.72rem',
+              border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)'}`,
+              backgroundColor: isCopied ? (isDark ? 'rgba(166,227,161,0.15)' : 'rgba(34,139,34,0.1)') : (isDark ? 'rgba(24,24,37,0.85)' : 'rgba(255,255,255,0.9)'),
+              color: isCopied ? (isDark ? '#a6e3a1' : '#16a34a') : (isDark ? '#6c7086' : '#64748b'),
                 cursor: 'pointer', transition: 'all 0.15s',
                 display: 'inline-flex', alignItems: 'center', gap: '4px',
                 fontFamily: "'JetBrains Mono', monospace",
                 backdropFilter: 'blur(8px)',
               }}
             >
-              {copied ? (
+              {isCopied ? (
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
@@ -122,17 +146,16 @@ export default function SqlHighlighter({
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
                 </svg>
               )}
-              {copied ? '已复制' : '复制'}
+              {isCopied ? '已复制' : '复制'}
             </button>
-          )}
           {showFormatToggle && (
             <button
               onClick={() => setFormatted(f => !f)}
               style={{
                 padding: '3px 10px', borderRadius: '4px', fontSize: '0.72rem',
-                border: '1px solid rgba(255,255,255,0.1)',
-                backgroundColor: formatted ? 'rgba(203,166,247,0.15)' : 'rgba(24,24,37,0.85)',
-                color: formatted ? '#cba6f7' : '#6c7086',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)'}`,
+                backgroundColor: formatted ? (isDark ? 'rgba(203,166,247,0.15)' : 'rgba(124,58,237,0.08)') : (isDark ? 'rgba(24,24,37,0.85)' : 'rgba(255,255,255,0.9)'),
+                color: formatted ? (isDark ? '#cba6f7' : '#7c3aed') : (isDark ? '#6c7086' : '#64748b'),
                 cursor: 'pointer', transition: 'all 0.15s',
                 display: 'inline-flex', alignItems: 'center', gap: '4px',
                 fontFamily: "'JetBrains Mono', monospace",
@@ -152,12 +175,12 @@ export default function SqlHighlighter({
       <pre style={{
         margin: 0,
         padding: 0,
-        backgroundColor: '#1e1e2e',
+        backgroundColor: theme.bg,
         borderRadius: 'var(--radius-md)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        border: `1px solid ${theme.border}`,
         fontSize: '0.8rem',
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        color: '#cdd6f4',
+        color: theme.text,
         maxHeight,
         overflowY: 'auto',
         overflowX: 'auto',
@@ -176,10 +199,10 @@ export default function SqlHighlighter({
               minWidth: `${gutterWidth}px`,
               paddingTop: '14px',
               paddingBottom: '14px',
-              backgroundColor: '#181825',
-              borderRight: '1px solid rgba(255,255,255,0.06)',
+              backgroundColor: theme.gutterBg,
+              borderRight: `1px solid ${theme.border}`,
               textAlign: 'right',
-              color: '#45475a',
+              color: theme.lineNum,
               userSelect: 'none',
               fontSize: '0.72rem',
               flexShrink: 0,
@@ -204,7 +227,7 @@ export default function SqlHighlighter({
           {lineTokens.map((lineToks, lineIdx) => (
             <div key={lineIdx} style={{ height: `${1.7 * 0.8}rem`, display: 'flex', alignItems: 'center' }}>
               {lineToks.length === 0 ? '\u00A0' : lineToks.map((token, i) => (
-                <span key={i} style={getTokenStyle(token.type)}>
+                <span key={i} style={getTokenStyle(token.type, isDark)}>
                   {token.value}
                 </span>
               ))}
@@ -783,23 +806,44 @@ function tokenize(sql: string): Token[] {
   return tokens;
 }
 
-function getTokenStyle(type: TokenType): React.CSSProperties {
-  switch (type) {
-    case 'keyword':
-      return { color: '#cba6f7', fontWeight: 600 }; // purple
-    case 'string':
-      return { color: '#a6e3a1' }; // green
-    case 'number':
-      return { color: '#fab387' }; // orange
-    case 'comment':
-      return { color: '#6c7086', fontStyle: 'italic' }; // gray
-    case 'operator':
-      return { color: '#89dceb' }; // cyan
-    case 'punctuation':
-      return { color: '#9399b2' }; // gray-blue
-    case 'identifier':
-      return { color: '#cdd6f4' }; // default light
-    default:
-      return {};
+const darkTheme = {
+  bg: '#1e1e2e',
+  gutterBg: '#181825',
+  border: 'rgba(255,255,255,0.06)',
+  text: '#cdd6f4',
+  lineNum: '#45475a',
+};
+
+const lightTheme = {
+  bg: '#fafafa',
+  gutterBg: '#f0f0f0',
+  border: 'rgba(0,0,0,0.08)',
+  text: '#1e293b',
+  lineNum: '#94a3b8',
+};
+
+function getTokenStyle(type: TokenType, isDark: boolean): React.CSSProperties {
+  if (isDark) {
+    switch (type) {
+      case 'keyword':     return { color: '#cba6f7', fontWeight: 600 };
+      case 'string':      return { color: '#a6e3a1' };
+      case 'number':      return { color: '#fab387' };
+      case 'comment':     return { color: '#6c7086', fontStyle: 'italic' };
+      case 'operator':    return { color: '#89dceb' };
+      case 'punctuation': return { color: '#9399b2' };
+      case 'identifier':  return { color: '#cdd6f4' };
+      default:            return {};
+    }
+  } else {
+    switch (type) {
+      case 'keyword':     return { color: '#7c3aed', fontWeight: 600 };
+      case 'string':      return { color: '#16a34a' };
+      case 'number':      return { color: '#ea580c' };
+      case 'comment':     return { color: '#94a3b8', fontStyle: 'italic' };
+      case 'operator':    return { color: '#0891b2' };
+      case 'punctuation': return { color: '#64748b' };
+      case 'identifier':  return { color: '#1e293b' };
+      default:            return {};
+    }
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
+import { escapeSqlString, validatePrivilege, validateObjectType, validateIdentifier } from '@/lib/sql-sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,13 +11,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (user) {
-      // Get grants for specific user
-      const grants = await executeQuery(sessionId, `SHOW GRANTS FOR '${user}'`).catch(() => ({ rows: [], fields: [] }));
+      // Get grants for specific user — escape user input
+      const safeUser = escapeSqlString(user);
+      const grants = await executeQuery(sessionId, `SHOW GRANTS FOR '${safeUser}'`).catch(() => ({ rows: [], fields: [] }), undefined, 'privileges');
       return NextResponse.json({ grants: grants.rows });
     }
 
     // Get all grants
-    const grants = await executeQuery(sessionId, 'SHOW ALL GRANTS').catch(() => ({ rows: [], fields: [] }));
+    const grants = await executeQuery(sessionId, 'SHOW ALL GRANTS').catch(() => ({ rows: [], fields: [] }), undefined, 'privileges');
     return NextResponse.json({ grants: grants.rows });
   } catch (err) {
     return NextResponse.json(
@@ -33,8 +35,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session ID, privilege, and grantee required' }, { status: 400 });
     }
 
+    const safePrivilege = validatePrivilege(privilege);
     const onClause = objectType && objectName
-      ? `ON ${objectType} ${objectName}`
+      ? `ON ${validateObjectType(objectType)} ${validateIdentifier(objectName, 'objectName') && objectName}`
       : 'ON ALL DATABASES';
 
     const toFrom = action === 'revoke' ? 'FROM' : 'TO';
@@ -42,13 +45,13 @@ export async function POST(request: NextRequest) {
 
     let target: string;
     if (granteeType === 'role') {
-      target = `ROLE '${grantee}'`;
+      target = `ROLE '${escapeSqlString(grantee)}'`;
     } else {
-      target = `'${grantee}'`;
+      target = `'${escapeSqlString(grantee)}'`;
     }
 
-    const sql = `${verb} ${privilege} ${onClause} ${toFrom} ${target}`;
-    await executeQuery(sessionId, sql);
+    const sql = `${verb} ${safePrivilege} ${onClause} ${toFrom} ${target}`;
+    await executeQuery(sessionId, sql, undefined, 'privileges');
 
     return NextResponse.json({ success: true, sql });
   } catch (err) {

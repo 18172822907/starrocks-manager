@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { usePagination } from '@/hooks/usePagination';
-import { Pagination } from '@/components/ui';
+import { Pagination, CommandLogButton} from '@/components/ui';
 import { Modal } from '@/components/ui/Modal';
+import Breadcrumb from '@/components/Breadcrumb';
 
 import Link from 'next/link';
 import {
@@ -156,6 +157,7 @@ export default function MaterializedViewsPage() {
   return (
     <>
       <div className="page-header">
+        <Breadcrumb items={[{ label: '数据管理' }, { label: '物化视图' }]} />
         <div className="page-header-row">
           <div>
             <h1 className="page-title">物化视图管理</h1>
@@ -173,6 +175,7 @@ export default function MaterializedViewsPage() {
             <button className="btn btn-primary" onClick={() => { setCreateModal(true); setActionError(''); setCreateSql(''); }}>
               <Plus size={16} /> 创建物化视图
             </button>
+            <CommandLogButton source="materialized-views" title="物化视图管理" />
             <button className="btn btn-secondary" onClick={() => fetchViews(true)} disabled={loading || refreshing}>
               <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
             </button>
@@ -319,14 +322,14 @@ export default function MaterializedViewsPage() {
                         {rows > 0 ? rows.toLocaleString() : ''}
                       </td>
                       <td>
-                        <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
-                          <Link href={`/materialized-views/${encodeURIComponent(db)}/${encodeURIComponent(name)}`} className="btn btn-ghost btn-icon" title="查看详情">
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                          <Link href={`/materialized-views/${encodeURIComponent(db)}/${encodeURIComponent(name)}`} className="btn-action btn-action-view" title="查看详情">
                             <Eye size={14} />
                           </Link>
-                          <button className="btn btn-ghost btn-icon" style={{ color: 'var(--success-600)' }} onClick={() => handleRefreshMV(db, name)} title="手动刷新">
+<button className="btn-action btn-action-success" onClick={() => handleRefreshMV(db, name)} title="手动刷新">
                             <Play size={14} />
                           </button>
-                          <button className="btn btn-ghost btn-icon" style={{ color: 'var(--danger-500)' }} onClick={() => { setDeleteModal({ open: true, db, name }); setActionError(''); }} title="删除">
+                          <button className="btn-action btn-action-danger" onClick={() => { setDeleteModal({ open: true, db, name }); setActionError(''); }} title="删除">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -342,10 +345,13 @@ export default function MaterializedViewsPage() {
               fontSize: '0.78rem', color: 'var(--text-tertiary)',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
             }}>
-              <span>
-                共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个物化视图
-                {(search || dbFilter !== 'all' || statusFilter !== 'all' || activeFilter !== 'all') && ` (过滤自 ${views.length} 个)`}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span>
+                  共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 个物化视图
+                  {(search || dbFilter !== 'all' || statusFilter !== 'all' || activeFilter !== 'all') && ` (过滤自 ${views.length} 个)`}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> SELECT * FROM information_schema.materialized_views</span>
+              </div>
               <Pagination page={pg.page} pageSize={pg.pageSize} totalPages={pg.totalPages} totalItems={pg.totalItems} onPageChange={pg.setPage} onPageSizeChange={pg.setPageSize} />
             </div>
           </div>

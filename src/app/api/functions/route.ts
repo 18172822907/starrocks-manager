@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/lib/db';
 import { getBlobCache, setBlobCache } from '@/lib/local-db';
+import { escapeBacktickId } from '@/lib/sql-sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,35 +21,44 @@ export async function GET(request: NextRequest) {
 
     const allFunctions: Record<string, unknown>[] = [];
 
-    // 1. Fetch global UDFs: SHOW GLOBAL FUNCTIONS
+    // 1. Try SHOW GLOBAL FUNCTIONS — returns ALL UDFs in one query (StarRocks 3.0+)
+    let usedGlobalQuery = false;
     try {
-      const globalFns = await executeQuery(sessionId, 'SHOW GLOBAL FUNCTIONS');
+      const globalFns = await executeQuery(sessionId, 'SHOW GLOBAL FUNCTIONS', undefined, 'functions');
       for (const row of globalFns.rows as Record<string, unknown>[]) {
         allFunctions.push({ ...row, _scope: 'GLOBAL' });
       }
+      usedGlobalQuery = true;
     } catch {
       // Version may not support SHOW GLOBAL FUNCTIONS
     }
 
-    // 2. Fetch per-database UDFs: SHOW FUNCTIONS IN <db>
-    try {
-      const dbResult = await executeQuery(sessionId, 'SHOW DATABASES');
-      const databases = (dbResult.rows as Record<string, unknown>[])
-        .map(r => String(r['Database'] || Object.values(r)[0] || ''))
-        .filter(d => d && d !== 'information_schema');
+    // 2. Also fetch per-database UDFs (non-global scope) if SHOW GLOBAL FUNCTIONS failed,
+    //    or supplement with per-database UDFs in all cases
+    if (!usedGlobalQuery) {
+      try {
+        const dbResult = await executeQuery(sessionId, 'SHOW DATABASES', undefined, 'functions');
+        const databases = (dbResult.rows as Record<string, unknown>[])
+          .map(r => String(r['Database'] || Object.values(r)[0] || ''))
+          .filter(d => d && d !== 'information_schema');
 
-      for (const db of databases) {
-        try {
-          const dbFns = await executeQuery(sessionId, `SHOW FUNCTIONS IN \`${db}\``);
-          for (const row of dbFns.rows as Record<string, unknown>[]) {
-            allFunctions.push({ ...row, _scope: db });
-          }
-        } catch {
-          // Some databases may not allow SHOW FUNCTIONS
+        // Use Promise.all for parallel execution instead of sequential loop
+        const results = await Promise.all(
+          databases.map(async (db) => {
+            try {
+              const dbFns = await executeQuery(sessionId, `SHOW FUNCTIONS IN \`${escapeBacktickId(db)}\``, undefined, 'functions');
+              return (dbFns.rows as Record<string, unknown>[]).map(row => ({ ...row, _scope: db }));
+            } catch {
+              return [];
+            }
+          })
+        );
+        for (const rows of results) {
+          allFunctions.push(...rows);
         }
+      } catch {
+        // If SHOW DATABASES fails, we may not have any functions
       }
-    } catch {
-      // If SHOW DATABASES fails, we already have global functions at least
     }
 
     let cachedAt: string | undefined;
@@ -64,3 +74,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

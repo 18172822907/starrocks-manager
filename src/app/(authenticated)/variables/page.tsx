@@ -5,6 +5,8 @@ import { useSession } from '@/hooks/useSession';
 import {
   Settings, RefreshCw, Search, Clock, Filter, Edit3, Check, X, ChevronDown, ChevronRight,
 } from 'lucide-react';
+import { CommandLogButton } from '@/components/ui';
+import Breadcrumb from '@/components/Breadcrumb';
 
 /* ── Variable Category Mapping ── */
 const CATEGORY_MAP: Record<string, string[]> = {
@@ -180,46 +182,42 @@ export default function VariablesPage() {
   return (
     <>
       <div className="page-header">
+        <Breadcrumb items={[{ label: '系统管理' }, { label: '变量管理' }]} />
         <div className="page-header-row">
           <div>
             <h1 className="page-title">变量管理</h1>
             <p className="page-description">
               管理 StarRocks 系统变量 · {variables.length} 个变量
               {lastRefreshed && (
-                <span style={{ marginLeft: '8px', opacity: 0.6, fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <span className="timestamp-hint">
                   <Clock size={11} /> {fromCache ? '缓存时间：' : '刷新时间：'}{lastRefreshed}
-                  {fromCache && <span style={{ marginLeft: '4px', padding: '1px 6px', borderRadius: '999px', fontSize: '0.68rem', backgroundColor: 'rgba(234,179,8,0.12)', color: 'var(--warning-600)', fontWeight: 600 }}>CACHE</span>}
+                  {fromCache && <span className="badge-cache">CACHE</span>}
                 </span>
               )}
             </p>
           </div>
-          <button className="btn btn-secondary" onClick={() => fetchVariables(true)} disabled={loading || refreshing}>
-            <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
-          </button>
+          <div className="flex gap-2">
+            <CommandLogButton source="variables" title="变量管理" />
+            <button className="btn btn-secondary" onClick={() => fetchVariables(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="page-body">
         {error && (
-          <div style={{ color: 'var(--danger-500)', marginBottom: '16px', padding: '10px 14px', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
-            {error}
-          </div>
+          <div className="error-banner">{error}</div>
         )}
         {success && <div className="toast toast-success">{success}</div>}
 
         {/* Scope tabs */}
-        <div style={{ display: 'flex', gap: '2px', marginBottom: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '3px', border: '1px solid var(--border-secondary)', width: 'fit-content' }}>
+        <div className="segmented-control">
           {(['session', 'global'] as const).map(s => (
             <button
               key={s}
               onClick={() => setScope(s)}
-              style={{
-                padding: '6px 18px', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', fontWeight: 600,
-                border: 'none', cursor: 'pointer', transition: 'all 0.15s ease',
-                backgroundColor: scope === s ? 'var(--bg-primary)' : 'transparent',
-                color: scope === s ? 'var(--primary-600)' : 'var(--text-secondary)',
-                boxShadow: scope === s ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-              }}
+              className={`segmented-option ${scope === s ? 'active' : ''}`}
             >
               {s === 'session' ? '📋 Session 变量' : '🌐 Global 变量'}
             </button>
@@ -314,10 +312,10 @@ export default function VariablesPage() {
                                     autoFocus
                                     onKeyDown={e => { if (e.key === 'Enter') handleSave(v.name); if (e.key === 'Escape') setEditingVar(null); }}
                                   />
-                                  <button className="btn btn-ghost btn-icon" onClick={() => handleSave(v.name)} disabled={saving} style={{ color: 'var(--success-600)' }}>
+                                  <button className="btn-action btn-action-success" onClick={() => handleSave(v.name)} disabled={saving}>
                                     <Check size={14} />
                                   </button>
-                                  <button className="btn btn-ghost btn-icon" onClick={() => setEditingVar(null)} style={{ color: 'var(--text-tertiary)' }}>
+                                  <button className="btn-action" onClick={() => setEditingVar(null)}>
                                     <X size={14} />
                                   </button>
                                 </>
@@ -331,9 +329,9 @@ export default function VariablesPage() {
                                     {v.value || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>empty</span>}
                                   </code>
                                   <button
-                                    className="btn btn-ghost btn-icon"
+                                    className="btn-action"
                                     onClick={() => { setEditingVar(v.name); setEditValue(v.value); }}
-                                    style={{ color: 'var(--text-tertiary)', opacity: 0.5 }}
+                                    style={{ opacity: 0.5 }}
                                     title="修改变量值"
                                   >
                                     <Edit3 size={12} />
