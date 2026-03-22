@@ -1,0 +1,163 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getLocalDb } from '@/lib/local-db';
+import { requireRole, AuthError, hashPassword } from '@/lib/auth';
+import type { SysUser } from '@/lib/auth';
+
+// GET /api/sys-users — list system users (admin only)
+export async function GET(request: NextRequest) {
+  try {
+    requireRole(request, 'admin');
+    const db = getLocalDb();
+    const users = db.prepare(
+      `SELECT id, username, display_name, role, is_active, created_at, updated_at, last_login_at
+       FROM sys_users ORDER BY id`
+    ).all() as SysUser[];
+
+    // Get cluster access for each user
+    const enriched = users.map(u => {
+      const clusters = db.prepare(
+        `SELECT c.id, c.name FROM clusters c
+         INNER JOIN user_cluster_access uca ON c.id = uca.cluster_id
+         WHERE uca.user_id = ?`
+      ).all(u.id) as { id: number; name: string }[];
+      return { ...u, clusters };
+    });
+
+    return NextResponse.json({ users: enriched });
+  } catch (err) {
+    const status = err instanceof AuthError ? err.status : 500;
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status });
+  }
+}
+
+// POST /api/sys-users — create user (admin only)
+export async function POST(request: NextRequest) {
+  try {
+    requireRole(request, 'admin');
+    const { username, password, display_name, role, cluster_ids } = await request.json();
+
+    if (!username || !password) {
+      return NextResponse.json({ error: '请填写用户名和密码' }, { status: 400 });
+    }
+    if (!['admin', 'editor', 'viewer'].includes(role || '')) {
+      return NextResponse.json({ error: '无效角色' }, { status: 400 });
+    }
+
+    const db = getLocalDb();
+
+    // Check duplicate
+    const existing = db.prepare('SELECT id FROM sys_users WHERE username = ?').get(username);
+    if (existing) {
+      return NextResponse.json({ error: `用户 "${username}" 已存在` }, { status: 409 });
+    }
+
+    const hash = hashPassword(password);
+    const result = db.prepare(
+      'INSERT INTO sys_users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)'
+    ).run(username, hash, display_name || '', role || 'viewer');
+
+    const userId = result.lastInsertRowid as number;
+
+    // Assign cluster access
+    if (Array.isArray(cluster_ids) && cluster_ids.length > 0) {
+      const insert = db.prepare('INSERT OR IGNORE INTO user_cluster_access (user_id, cluster_id) VALUES (?, ?)');
+      for (const cid of cluster_ids) {
+        insert.run(userId, cid);
+      }
+    }
+
+    return NextResponse.json({ success: true, id: userId });
+  } catch (err) {
+    const status = err instanceof AuthError ? err.status : 500;
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status });
+  }
+}
+
+// PUT /api/sys-users — update user (admin only)
+export async function PUT(request: NextRequest) {
+  try {
+    requireRole(request, 'admin');
+    const { id, username, password, display_name, role, is_active, cluster_ids } = await request.json();
+
+    if (!id) {
+      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    }
+
+    const db = getLocalDb();
+    const user = db.prepare('SELECT * FROM sys_users WHERE id = ?').get(id) as (SysUser & { password_hash: string }) | undefined;
+    if (!user) {
+      return NextResponse.json({ error: '用户不存在' }, { status: 404 });
+    }
+
+    // Prevent disabling the last admin
+    if (is_active === 0 && user.role === 'admin') {
+      const adminCount = db.prepare("SELECT COUNT(*) as cnt FROM sys_users WHERE role = 'admin' AND is_active = 1").get() as { cnt: number };
+      if (adminCount.cnt <= 1) {
+        return NextResponse.json({ error: '不能禁用最后一个管理员账号' }, { status: 400 });
+      }
+    }
+
+    // Build update
+    const updates: string[] = [];
+    const values: unknown[] = [];
+
+    if (username !== undefined) { updates.push('username = ?'); values.push(username); }
+    if (display_name !== undefined) { updates.push('display_name = ?'); values.push(display_name); }
+    if (role !== undefined) { updates.push('role = ?'); values.push(role); }
+    if (is_active !== undefined) { updates.push('is_active = ?'); values.push(is_active); }
+    if (password) {
+      updates.push('password_hash = ?');
+      values.push(hashPassword(password));
+    }
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+
+    db.prepare(`UPDATE sys_users SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+    // Update cluster access
+    if (Array.isArray(cluster_ids)) {
+      db.prepare('DELETE FROM user_cluster_access WHERE user_id = ?').run(id);
+      const insert = db.prepare('INSERT OR IGNORE INTO user_cluster_access (user_id, cluster_id) VALUES (?, ?)');
+      for (const cid of cluster_ids) {
+        insert.run(id, cid);
+      }
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    const status = err instanceof AuthError ? err.status : 500;
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status });
+  }
+}
+
+// DELETE /api/sys-users — delete user (admin only)
+export async function DELETE(request: NextRequest) {
+  try {
+    requireRole(request, 'admin');
+    const { id } = await request.json();
+
+    if (!id) {
+      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    }
+
+    const db = getLocalDb();
+    const user = db.prepare('SELECT role FROM sys_users WHERE id = ?').get(id) as { role: string } | undefined;
+    if (!user) {
+      return NextResponse.json({ error: '用户不存在' }, { status: 404 });
+    }
+
+    // Prevent deleting the last admin
+    if (user.role === 'admin') {
+      const adminCount = db.prepare("SELECT COUNT(*) as cnt FROM sys_users WHERE role = 'admin'").get() as { cnt: number };
+      if (adminCount.cnt <= 1) {
+        return NextResponse.json({ error: '不能删除最后一个管理员账号' }, { status: 400 });
+      }
+    }
+
+    db.prepare('DELETE FROM sys_users WHERE id = ?').run(id);
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    const status = err instanceof AuthError ? err.status : 500;
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status });
+  }
+}

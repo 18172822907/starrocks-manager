@@ -24,18 +24,19 @@ export async function GET(
          AND DEFINITION LIKE '%${name}%'
          ORDER BY CREATE_TIME DESC
          LIMIT 10`
-      ).catch(() => ({ rows: [], fields: [] }), undefined, 'materialized-views');
+      ).catch(() => ({ rows: [], fields: [] }));
       return NextResponse.json({ taskRuns: taskRuns.rows });
     }
 
     // Default: fetch schema, DDL, preview, and MV info (no task_runs)
     const [schema, createMV, preview, mvInfoResult] = await Promise.all([
-      executeQuery(sessionId, `DESC ${fullName}`).catch(() => ({ rows: [], fields: [] }), undefined, 'materialized-views'),
-      executeQuery(sessionId, `SHOW CREATE MATERIALIZED VIEW ${fullName}`).catch(() => ({ rows: [], fields: [] }), undefined, 'materialized-views'),
-      executeQuery(sessionId, `SELECT * FROM ${fullName} LIMIT ${limit}`).catch(() => ({ rows: [], fields: [] }), undefined, 'materialized-views'),
+      executeQuery(sessionId, `DESC ${fullName}`, undefined, 'materialized-views').catch(() => ({ rows: [], fields: [] })),
+      executeQuery(sessionId, `SHOW CREATE MATERIALIZED VIEW ${fullName}`, undefined, 'materialized-views').catch(() => ({ rows: [], fields: [] })),
+      executeQuery(sessionId, `SELECT * FROM ${fullName} LIMIT ${limit}`, undefined, 'materialized-views').catch(() => ({ rows: [], fields: [] })),
       executeQuery(sessionId,
-        `SELECT IS_ACTIVE, REFRESH_TYPE, INACTIVE_REASON FROM information_schema.materialized_views WHERE TABLE_SCHEMA = '${db}' AND TABLE_NAME = '${name}' LIMIT 1`
-      ).catch(() => ({ rows: [], fields: [] }), undefined, 'materialized-views'),
+        `SELECT IS_ACTIVE, REFRESH_TYPE, INACTIVE_REASON FROM information_schema.materialized_views WHERE TABLE_SCHEMA = '${db}' AND TABLE_NAME = '${name}' LIMIT 1`,
+        undefined, 'materialized-views'
+      ).catch(() => ({ rows: [], fields: [] })),
     ]);
 
     // Extract DDL

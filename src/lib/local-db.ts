@@ -164,76 +164,67 @@ export function getLocalDb(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_command_log_session_source ON command_log(session_id, source);
     CREATE INDEX IF NOT EXISTS idx_command_log_created ON command_log(created_at);
+
+    -- System users (application-level auth)
+    CREATE TABLE IF NOT EXISTS sys_users (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      username      TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      display_name  TEXT DEFAULT '',
+      role          TEXT NOT NULL DEFAULT 'viewer',
+      is_active     INTEGER DEFAULT 1,
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_login_at DATETIME
+    );
+
+    -- StarRocks cluster configs (managed by admin)
+    CREATE TABLE IF NOT EXISTS clusters (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT NOT NULL UNIQUE,
+      host        TEXT NOT NULL,
+      port        INTEGER NOT NULL DEFAULT 9030,
+      username    TEXT NOT NULL,
+      password    TEXT NOT NULL DEFAULT '',
+      default_db  TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      is_active   INTEGER DEFAULT 1,
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- User-cluster access control
+    CREATE TABLE IF NOT EXISTS user_cluster_access (
+      user_id    INTEGER NOT NULL,
+      cluster_id INTEGER NOT NULL,
+      PRIMARY KEY (user_id, cluster_id),
+      FOREIGN KEY (user_id)    REFERENCES sys_users(id) ON DELETE CASCADE,
+      FOREIGN KEY (cluster_id) REFERENCES clusters(id)  ON DELETE CASCADE
+    );
+
+    -- System sessions
+    CREATE TABLE IF NOT EXISTS sys_sessions (
+      token       TEXT PRIMARY KEY,
+      user_id     INTEGER NOT NULL,
+      cluster_id  INTEGER,
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at  DATETIME NOT NULL,
+      FOREIGN KEY (user_id)    REFERENCES sys_users(id) ON DELETE CASCADE,
+      FOREIGN KEY (cluster_id) REFERENCES clusters(id)  ON DELETE SET NULL
+    );
   `);
+
+  // Auto-seed admin user on first run
+  const adminExists = db.prepare('SELECT id FROM sys_users WHERE username = ?').get('admin');
+  if (!adminExists) {
+    const bcrypt = require('bcryptjs');
+    const hash = bcrypt.hashSync('admin123', 10);
+    db.prepare('INSERT INTO sys_users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)').run('admin', hash, '管理员', 'admin');
+  }
 
   return db;
 }
 
-// ---- Connection CRUD ----
-
-export interface SavedConnection {
-  id: number;
-  name: string;
-  host: string;
-  port: number;
-  username: string;
-  password: string;
-  default_db: string;
-  created_at: string;
-  updated_at: string;
-  last_used_at: string | null;
-}
-
-export function listConnections(): SavedConnection[] {
-  const db = getLocalDb();
-  return db.prepare('SELECT * FROM connections ORDER BY last_used_at DESC, updated_at DESC').all() as SavedConnection[];
-}
-
-export function getConnection(id: number): SavedConnection | undefined {
-  const db = getLocalDb();
-  return db.prepare('SELECT * FROM connections WHERE id = ?').get(id) as SavedConnection | undefined;
-}
-
-export function createConnection(conn: Omit<SavedConnection, 'id' | 'created_at' | 'updated_at' | 'last_used_at'>): SavedConnection {
-  const db = getLocalDb();
-  const stmt = db.prepare(
-    'INSERT INTO connections (name, host, port, username, password, default_db) VALUES (?, ?, ?, ?, ?, ?)'
-  );
-  const result = stmt.run(conn.name, conn.host, conn.port, conn.username, conn.password, conn.default_db || '');
-  return getConnection(result.lastInsertRowid as number)!;
-}
-
-export function updateConnection(id: number, conn: Partial<Omit<SavedConnection, 'id' | 'created_at' | 'updated_at'>>): SavedConnection | undefined {
-  const db = getLocalDb();
-  const fields: string[] = [];
-  const values: unknown[] = [];
-
-  if (conn.name !== undefined) { fields.push('name = ?'); values.push(conn.name); }
-  if (conn.host !== undefined) { fields.push('host = ?'); values.push(conn.host); }
-  if (conn.port !== undefined) { fields.push('port = ?'); values.push(conn.port); }
-  if (conn.username !== undefined) { fields.push('username = ?'); values.push(conn.username); }
-  if (conn.password !== undefined) { fields.push('password = ?'); values.push(conn.password); }
-  if (conn.default_db !== undefined) { fields.push('default_db = ?'); values.push(conn.default_db); }
-
-  if (fields.length === 0) return getConnection(id);
-
-  fields.push('updated_at = CURRENT_TIMESTAMP');
-  values.push(id);
-
-  db.prepare(`UPDATE connections SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  return getConnection(id);
-}
-
-export function deleteConnection(id: number): boolean {
-  const db = getLocalDb();
-  const result = db.prepare('DELETE FROM connections WHERE id = ?').run(id);
-  return result.changes > 0;
-}
-
-export function touchConnection(id: number): void {
-  const db = getLocalDb();
-  db.prepare('UPDATE connections SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
-}
 
 // ---- Settings ----
 

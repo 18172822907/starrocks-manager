@@ -171,15 +171,6 @@ export default function MaterializedViewsPage() {
               )}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-primary" onClick={() => { setCreateModal(true); setActionError(''); setCreateSql(''); }}>
-              <Plus size={16} /> 创建物化视图
-            </button>
-            <CommandLogButton source="materialized-views" title="物化视图管理" />
-            <button className="btn btn-secondary" onClick={() => fetchViews(true)} disabled={loading || refreshing}>
-              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -191,11 +182,11 @@ export default function MaterializedViewsPage() {
         )}
         {success && <div className="toast toast-success">{success}</div>}
 
-        {/* Filter bar */}
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="search-bar" style={{ flex: 1, minWidth: '200px', marginBottom: 0 }}>
-            <Search />
-            <input className="input" placeholder="搜索物化视图名称/数据库..." value={search} onChange={e => setSearch(e.target.value)} />
+        {/* Filter bar + actions */}
+        <div className="table-toolbar">
+          <div className="table-search">
+            <Search size={15} className="table-search-icon" />
+            <input placeholder="搜索物化视图名称/数据库..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <select style={selectStyle} value={dbFilter} onChange={e => setDbFilter(e.target.value)}>
@@ -225,6 +216,15 @@ export default function MaterializedViewsPage() {
               <option value="all">全部刷新状态</option>
               {allStatuses.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+          </div>
+          <div className="toolbar-actions">
+            <button className="btn btn-primary" onClick={() => { setCreateModal(true); setActionError(''); setCreateSql(''); }}>
+              <Plus size={16} /> 创建物化视图
+            </button>
+            <CommandLogButton source="materialized-views" title="物化视图管理" />
+            <button className="btn btn-secondary" onClick={() => fetchViews(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
+            </button>
           </div>
         </div>
 

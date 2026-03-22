@@ -110,12 +110,6 @@ export default function FunctionsPage() {
               )}
             </p>
           </div>
-          <div className="flex gap-2">
-            <CommandLogButton source="functions" title="函数管理" />
-            <button className="btn btn-secondary" onClick={() => fetchFunctions(true)} disabled={loading || refreshing}>
-              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -126,10 +120,10 @@ export default function FunctionsPage() {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="search-bar" style={{ flex: 1, minWidth: '200px', marginBottom: 0 }}>
-            <Search />
-            <input className="input" placeholder="搜索函数名或返回类型..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="table-toolbar">
+          <div className="table-search">
+            <Search size={15} className="table-search-icon" />
+            <input placeholder="搜索函数名或返回类型..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Filter size={14} style={{ color: 'var(--text-tertiary)' }} />
@@ -155,6 +149,12 @@ export default function FunctionsPage() {
                 <option key={s} value={s}>{s === 'GLOBAL' ? '🌐 GLOBAL' : `📁 ${s}`}</option>
               ))}
             </select>
+          </div>
+          <div className="toolbar-actions">
+            <CommandLogButton source="functions" title="函数管理" />
+            <button className="btn btn-secondary" onClick={() => fetchFunctions(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
+            </button>
           </div>
         </div>
 

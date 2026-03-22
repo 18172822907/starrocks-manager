@@ -13,12 +13,12 @@ export async function GET(request: NextRequest) {
     if (user) {
       // Get grants for specific user — escape user input
       const safeUser = escapeSqlString(user);
-      const grants = await executeQuery(sessionId, `SHOW GRANTS FOR '${safeUser}'`).catch(() => ({ rows: [], fields: [] }), undefined, 'privileges');
+      const grants = await executeQuery(sessionId, `SHOW GRANTS FOR '${safeUser}'`, undefined, 'privileges').catch(() => ({ rows: [], fields: [] }));
       return NextResponse.json({ grants: grants.rows });
     }
 
     // Get all grants
-    const grants = await executeQuery(sessionId, 'SHOW ALL GRANTS').catch(() => ({ rows: [], fields: [] }), undefined, 'privileges');
+    const grants = await executeQuery(sessionId, 'SHOW ALL GRANTS', undefined, 'privileges').catch(() => ({ rows: [], fields: [] }));
     return NextResponse.json({ grants: grants.rows });
   } catch (err) {
     return NextResponse.json(

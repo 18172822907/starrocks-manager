@@ -233,8 +233,13 @@ export default function MVDetailPage() {
             </h1>
             <p className="page-description">{db} · {schema.length} 列 · 物化视图</p>
           </div>
-          {/* Action buttons in header */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        </div>
+      </div>
+
+      <div className="page-body">
+        <div className="table-toolbar">
+          <div />
+          <div className="toolbar-actions">
             <button
               className="btn btn-secondary btn-sm"
               onClick={handleRefreshMV}
@@ -266,9 +271,6 @@ export default function MVDetailPage() {
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="page-body">
         {/* Success / Error messages */}
         {success && (
           <div style={{

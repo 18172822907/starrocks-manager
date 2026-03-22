@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AuthProvider } from "@/hooks/useAuth";
 
 export const metadata: Metadata = {
-  title: "StarRocks Manager - 数据库管理工具",
+  title: "StarRocks Manager - 数据库管理平台",
   description: "StarRocks 专用数据库管理工具 - 节点监控、元数据浏览、用户权限管理",
 };
 
@@ -16,7 +17,9 @@ export default function RootLayout({
     <html lang="zh-CN" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          {children}
+          <AuthProvider>
+            {children}
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

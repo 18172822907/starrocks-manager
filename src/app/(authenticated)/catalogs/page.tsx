@@ -195,15 +195,6 @@ export default function CatalogsPage() {
               )}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-primary" onClick={() => { setCreateModal(true); setActionError(''); setCreateSql(''); }}>
-              <Plus size={16} /> 创建 Catalog
-            </button>
-            <CommandLogButton source="catalogs" title="Catalog 管理" />
-            <button className="btn btn-secondary" onClick={() => fetchCatalogs(true)} disabled={loading || refreshing}>
-              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -212,9 +203,20 @@ export default function CatalogsPage() {
           <div className="error-banner">{error}</div>
         )}
 
-        <div className="search-bar mb-4">
-          <Search />
-          <input className="input" placeholder="搜索 Catalog 名称或类型..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="table-toolbar">
+          <div className="table-search">
+            <Search size={15} className="table-search-icon" />
+            <input placeholder="搜索 Catalog 名称或类型..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="toolbar-actions">
+            <button className="btn btn-primary" onClick={() => { setCreateModal(true); setActionError(''); setCreateSql(''); }}>
+              <Plus size={16} /> 创建 Catalog
+            </button>
+            <CommandLogButton source="catalogs" title="Catalog 管理" />
+            <button className="btn btn-secondary" onClick={() => fetchCatalogs(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
+            </button>
+          </div>
         </div>
 
         {loading ? (

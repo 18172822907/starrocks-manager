@@ -3,15 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import ThemeSwitcher from '@/components/ThemeSwitcher';
-import { useSession } from '@/hooks/useSession';
+import { useAuth } from '@/hooks/useAuth';
+import type { SysRole } from '@/hooks/useAuth';
 import {
   LayoutDashboard,
   Database,
   Users,
   Shield,
   Terminal,
-  LogOut,
   ShieldCheck,
   Layers,
   FolderTree,
@@ -25,39 +24,70 @@ import {
   Server,
   Paintbrush,
   CalendarClock,
+  UserCog,
+  Network,
 } from 'lucide-react';
 
-const navItems = [
+interface NavItem {
+  label: string;
+  section?: boolean;
+  href?: string;
+  icon?: React.ElementType;
+  minRole?: SysRole;
+}
+
+const navItems: NavItem[] = [
   { label: '监控', section: true },
   { href: '/dashboard', icon: LayoutDashboard, label: '仪表盘' },
   { label: '数据管理', section: true },
   { href: '/databases', icon: Database, label: '数据库浏览' },
   { href: '/catalogs', icon: FolderTree, label: 'Catalog 管理' },
   { href: '/materialized-views', icon: Box, label: '物化视图' },
-  { href: '/query', icon: Terminal, label: 'SQL 查询' },
+  { href: '/query', icon: Terminal, label: 'SQL 查询', minRole: 'editor' },
   { label: '任务管理', section: true },
   { href: '/routine-load', icon: Radio, label: 'Routine Load' },
   { href: '/broker-load', icon: HardDrive, label: 'Broker Load' },
   { href: '/pipes', icon: GitBranch, label: 'Pipes' },
   { href: '/task-manager', icon: CalendarClock, label: 'Submit Task' },
   { href: '/tasks', icon: ListChecks, label: 'Task Runs' },
-  { label: '权限管理', section: true },
-  { href: '/users', icon: Users, label: '用户管理' },
-  { href: '/roles', icon: ShieldCheck, label: '角色管理' },
-  { href: '/privileges', icon: Shield, label: '权限管理' },
-  { label: '资源管理', section: true },
-  { href: '/resource-groups', icon: Layers, label: '资源组管理' },
+  { label: '权限管理', section: true, minRole: 'admin' },
+  { href: '/users', icon: Users, label: '用户管理', minRole: 'admin' },
+  { href: '/roles', icon: ShieldCheck, label: '角色管理', minRole: 'admin' },
+  { href: '/privileges', icon: Shield, label: '权限管理', minRole: 'admin' },
+  { label: '资源管理', section: true, minRole: 'editor' },
+  { href: '/resource-groups', icon: Layers, label: '资源组管理', minRole: 'editor' },
   { label: '系统管理', section: true },
-  { href: '/nodes', icon: Server, label: '节点管理' },
-
+  { href: '/nodes', icon: Server, label: '节点管理', minRole: 'admin' },
   { href: '/functions', icon: Code2, label: '函数管理' },
   { href: '/variables', icon: Settings, label: '变量管理' },
-  { href: '/design-system', icon: Paintbrush, label: 'UI 规范' },
+  { href: '/cluster-manager', icon: Network, label: '集群管理', minRole: 'admin' },
+  { href: '/sys-users', icon: UserCog, label: '系统用户', minRole: 'admin' },
+  { href: '/design-system', icon: Paintbrush, label: 'UI 规范', minRole: 'admin' },
 ];
+
+const ROLE_LEVEL: Record<SysRole, number> = { viewer: 0, editor: 1, admin: 2 };
+
+function hasAccess(userRole: SysRole, minRole?: SysRole): boolean {
+  if (!minRole) return true;
+  return ROLE_LEVEL[userRole] >= ROLE_LEVEL[minRole];
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { session, disconnect } = useSession();
+  const { user } = useAuth();
+
+  if (!user) return null;
+
+  // Filter nav items by role
+  const visibleItems = navItems.filter(item => {
+    if (item.section) {
+      const idx = navItems.indexOf(item);
+      const nextSectionIdx = navItems.findIndex((n, i) => i > idx && n.section);
+      const children = navItems.slice(idx + 1, nextSectionIdx === -1 ? undefined : nextSectionIdx);
+      return children.some(c => hasAccess(user.role, c.minRole));
+    }
+    return hasAccess(user.role, item.minRole);
+  });
 
   return (
     <aside className="sidebar">
@@ -65,12 +95,12 @@ export default function Sidebar() {
         <div className="sidebar-logo">SR</div>
         <div>
           <div className="sidebar-title">StarRocks Manager</div>
-          <div className="sidebar-subtitle">数据库管理工具</div>
+          <div className="sidebar-subtitle">数据库管理平台</div>
         </div>
       </div>
 
       <nav className="sidebar-nav">
-        {navItems.map((item, i) => {
+        {visibleItems.map((item, i) => {
           if (item.section) {
             return <div key={i} className="nav-section-label">{item.label}</div>;
           }
@@ -84,25 +114,6 @@ export default function Sidebar() {
           );
         })}
       </nav>
-
-      <div className="sidebar-footer">
-        <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
-          <ThemeSwitcher />
-        </div>
-
-        {session && (
-          <div className="connection-badge">
-            <span className="connection-dot connected" />
-            <div className="connection-info">
-              <div className="connection-host">{session.host}:{session.port}</div>
-              <div className="connection-user">{session.username} · {session.version || 'StarRocks'}</div>
-            </div>
-            <button className="btn-ghost btn-icon" onClick={disconnect} title="断开连接">
-              <LogOut size={16} />
-            </button>
-          </div>
-        )}
-      </div>
     </aside>
   );
 }

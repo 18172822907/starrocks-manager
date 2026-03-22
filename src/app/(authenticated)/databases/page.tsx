@@ -123,13 +123,6 @@ export default function DatabasesPage() {
               )}
             </p>
           </div>
-          <div className="flex gap-2">
-            <CommandLogButton source="databases" title="数据库浏览" />
-            <button className="btn btn-secondary" onClick={() => fetchDatabases(true)} disabled={loading || refreshing}>
-              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} />
-              {refreshing ? '刷新中...' : '刷新'}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -138,15 +131,23 @@ export default function DatabasesPage() {
           <div className="error-banner">{error}</div>
         )}
 
-        {/* Search */}
-        <div className="search-bar mb-4">
-          <Search />
-          <input
-            className="input"
-            placeholder="搜索数据库名..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+        {/* Table Toolbar */}
+        <div className="table-toolbar">
+          <div className="table-search">
+            <Search size={15} className="table-search-icon" />
+            <input
+              placeholder="搜索数据库名..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="toolbar-actions">
+            <CommandLogButton source="databases" title="数据库浏览" />
+            <button className="btn btn-secondary" onClick={() => fetchDatabases(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} />
+              {refreshing ? '刷新中...' : '刷新'}
+            </button>
+          </div>
         </div>
 
         {/* Table */}

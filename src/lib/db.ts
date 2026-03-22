@@ -1,10 +1,19 @@
 import mysql, { Pool, PoolOptions, RowDataPacket } from 'mysql2/promise';
-import { listConnections, appendCommandLog } from './local-db';
+import { appendCommandLog } from './local-db';
 
 // Store active connection pools by session (preserve across Next.js HMR)
-const globalForDb = globalThis as unknown as { __starrocksPools?: Map<string, Pool> };
+const globalForDb = globalThis as unknown as {
+  __starrocksPools?: Map<string, Pool>;
+  __failedConnections?: Map<string, number>;
+};
 const pools: Map<string, Pool> = globalForDb.__starrocksPools || new Map();
 if (process.env.NODE_ENV !== 'production') globalForDb.__starrocksPools = pools;
+
+// Connection failure cache: sessionId → timestamp of last failure
+// Prevents retrying connections that are known to be down
+const FAILURE_COOLDOWN_MS = 30_000; // Don't retry for 30 seconds after failure
+const failedConnections: Map<string, number> = globalForDb.__failedConnections || new Map();
+if (process.env.NODE_ENV !== 'production') globalForDb.__failedConnections = failedConnections;
 
 export interface StarRocksConnectionConfig {
   host: string;
@@ -16,6 +25,33 @@ export interface StarRocksConnectionConfig {
 
 export function getSessionId(config: StarRocksConnectionConfig): string {
   return `${config.user}@${config.host}:${config.port}`;
+}
+
+/** Check if a sessionId is in failure cooldown */
+function isInFailureCooldown(sessionId: string): boolean {
+  const failedAt = failedConnections.get(sessionId);
+  if (!failedAt) return false;
+  if (Date.now() - failedAt > FAILURE_COOLDOWN_MS) {
+    failedConnections.delete(sessionId);
+    return false;
+  }
+  return true;
+}
+
+/** Mark a sessionId as failed */
+function markConnectionFailed(sessionId: string): void {
+  failedConnections.set(sessionId, Date.now());
+}
+
+/** Clear failure status for a sessionId */
+export function clearConnectionFailure(sessionId: string): void {
+  failedConnections.delete(sessionId);
+  // Also clear by host:port pattern
+  for (const key of failedConnections.keys()) {
+    if (key.endsWith(`@${sessionId}`) || key === sessionId) {
+      failedConnections.delete(key);
+    }
+  }
 }
 
 export async function createPool(config: StarRocksConnectionConfig): Promise<Pool> {
@@ -37,7 +73,7 @@ export async function createPool(config: StarRocksConnectionConfig): Promise<Poo
     waitForConnections: true,
     connectionLimit: 5,
     queueLimit: 0,
-    connectTimeout: 10000,
+    connectTimeout: 5000, // Reduced from 10s to 5s
     enableKeepAlive: true,
     keepAliveInitialDelay: 30000,
   };
@@ -45,9 +81,21 @@ export async function createPool(config: StarRocksConnectionConfig): Promise<Poo
   const pool = mysql.createPool(poolOptions);
 
   // Test connection
-  const connection = await pool.getConnection();
-  connection.release();
+  try {
+    const connection = await pool.getConnection();
+    connection.release();
+  } catch (err) {
+    // Mark as failed and clean up pool
+    markConnectionFailed(sessionId);
+    // Also mark host:port pattern for the bridged sessionId
+    markConnectionFailed(`${config.host}:${config.port}`);
+    try { await pool.end(); } catch { /* ignore */ }
+    throw err;
+  }
 
+  // Clear failure cache on success
+  failedConnections.delete(sessionId);
+  failedConnections.delete(`${config.host}:${config.port}`);
   pools.set(sessionId, pool);
   return pool;
 }
@@ -64,19 +112,34 @@ export async function closePool(sessionId: string): Promise<void> {
   }
 }
 
-// Recreate pool from saved connection info
+// Recreate pool from cluster config or saved connection info
 async function recreatePool(sessionId: string): Promise<Pool | null> {
-  const connections = listConnections();
-  const conn = connections.find(c => getSessionId({ host: c.host, port: c.port || 9030, user: c.username, password: '' }) === sessionId);
-  if (conn) {
-    return createPool({
-      host: conn.host,
-      port: conn.port || 9030,
-      user: conn.username,
-      password: conn.password,
-      database: conn.default_db || undefined,
-    });
+  // Check failure cooldown FIRST — don't even try if recently failed
+  if (isInFailureCooldown(sessionId)) {
+    return null;
   }
+
+  // Try clusters table first (new auth model: sessionId = "host:port")
+  try {
+    const { getLocalDb } = require('./local-db');
+    const db = getLocalDb();
+    const [host, portStr] = sessionId.split(':');
+    if (host && portStr) {
+      const cluster = db.prepare(
+        'SELECT * FROM clusters WHERE host = ? AND port = ? AND is_active = 1'
+      ).get(host, parseInt(portStr, 10)) as { host: string; port: number; username: string; password: string; default_db: string } | undefined;
+      if (cluster) {
+        return createPool({
+          host: cluster.host,
+          port: cluster.port,
+          user: cluster.username,
+          password: cluster.password,
+          database: cluster.default_db || undefined,
+        });
+      }
+    }
+  } catch { /* ignore - might not have clusters table yet */ }
+
   return null;
 }
 
@@ -86,6 +149,18 @@ export async function executeQuery<T extends RowDataPacket[] = RowDataPacket[]>(
   params?: unknown[],
   source?: string,
 ): Promise<{ rows: T; fields: { name: string; type: number }[] }> {
+  // Fast-fail if in failure cooldown — unconditional circuit breaker.
+  // Once a connection is known to be down, reject ALL queries immediately
+  // until the cooldown expires. This prevents 500 error floods.
+  if (isInFailureCooldown(sessionId)) {
+    const errMsg = '集群连接不可用，请检查集群状态后重试';
+    // Only log non-health-check queries to avoid log noise
+    if (source && source !== 'health') {
+      appendCommandLog(sessionId, source, sql, 'error', 0, 0, errMsg);
+    }
+    throw new Error(errMsg);
+  }
+
   let pool = getPool(sessionId);
   if (!pool) {
     // Attempt auto-reconnect from local db
@@ -97,7 +172,7 @@ export async function executeQuery<T extends RowDataPacket[] = RowDataPacket[]>(
 
   const startTime = Date.now();
 
-  // Try query, retry once on connection errors
+  // Try query, retry once on connection errors (but NOT recreatePool to avoid 10s delay)
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const [rows, fields] = await pool.query<T>(sql, params);
@@ -116,21 +191,22 @@ export async function executeQuery<T extends RowDataPacket[] = RowDataPacket[]>(
         msg.includes('ECONNRESET') ||
         msg.includes('PROTOCOL_CONNECTION_LOST') ||
         msg.includes('ECONNREFUSED') ||
+        msg.includes('ETIMEDOUT') ||
         msg.includes('Connection lost');
 
       if (isConnectionError && attempt === 0) {
-        console.warn(`[Pool ${sessionId}] Connection error, recreating pool: ${msg}`);
-        // Remove dead pool and recreate
+        console.warn(`[Pool ${sessionId}] Connection error: ${msg}`);
+        // Remove dead pool — but do NOT recreatePool here (avoids 10s timeout!)
         pools.delete(sessionId);
         try { await pool.end(); } catch { /* ignore */ }
-        const newPool = await recreatePool(sessionId);
-        if (newPool) {
-          pool = newPool;
-          continue; // retry
-        }
+        // Mark as failed to prevent rapid retries from other requests
+        markConnectionFailed(sessionId);
+      } else if (isConnectionError) {
+        // Second attempt also failed — ensure we mark as failed
+        markConnectionFailed(sessionId);
       }
-      // Log error if source is provided
-      if (source) {
+      // Log error if source is provided (skip health checks to reduce noise)
+      if (source && source !== 'health') {
         const durationMs = Date.now() - startTime;
         appendCommandLog(sessionId, source, sql, 'error', 0, durationMs, msg);
       }

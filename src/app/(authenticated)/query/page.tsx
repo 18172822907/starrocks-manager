@@ -110,9 +110,6 @@ export default function QueryPage() {
             <h1 className="page-title">SQL 查询</h1>
             <p className="page-description">执行 SQL 查询并查看结果 · Ctrl+Enter 执行</p>
           </div>
-          <div className="flex gap-2">
-            <CommandLogButton source="query" title="SQL 查询" />
-          </div>
         </div>
       </div>
 
@@ -133,6 +130,7 @@ export default function QueryPage() {
               Ctrl+Enter 执行 · 支持单条 SQL 语句
             </div>
             <div className="flex gap-2">
+              <CommandLogButton source="query" title="SQL 查询" />
               <button className="btn btn-secondary btn-sm" onClick={() => setSql('')} disabled={!sql}>
                 <Trash2 size={14} /> 清空
               </button>

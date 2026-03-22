@@ -219,11 +219,15 @@ code, pre {
 
 .sidebar-nav {
   flex: 1;
-  padding: 12px 8px;
+  padding: 4px 8px 12px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
+}
+
+.sidebar-nav .nav-section-label:first-child {
+  padding-top: 8px;
 }
 
 .nav-section-label {
@@ -326,6 +330,269 @@ code, pre {
   height: 100vh;
   min-width: 0;
   overflow: hidden;
+  position: relative;
+}
+
+/* ---- Top-right User Menu (floating) ---- */
+/* ---- Topbar Header (cluster switcher + user menu) ---- */
+.topbar-header {
+  position: absolute;
+  top: 14px;
+  right: 20px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Cluster Switcher Button */
+.cluster-switcher-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  box-shadow: var(--shadow-sm);
+}
+
+.cluster-switcher-btn:hover {
+  border-color: var(--primary-200);
+  box-shadow: var(--shadow-md);
+}
+
+.cluster-switcher-name {
+  font-weight: 600;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cluster-status-dot-wrapper {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.cluster-status-pulse {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  opacity: 0.3;
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+
+.cluster-status-dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+@keyframes pulse-ring {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.4); opacity: 0; }
+}
+
+.cluster-status-badge {
+  display: inline-flex;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+}
+
+.cluster-status-badge--online {
+  color: var(--success-600);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.cluster-status-badge--offline {
+  color: var(--danger-600);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.cluster-status-badge--unknown {
+  color: var(--warning-600);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+[data-theme="dark"] .cluster-status-badge--online {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success-400);
+}
+
+[data-theme="dark"] .cluster-status-badge--offline {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger-400);
+}
+
+[data-theme="dark"] .cluster-status-badge--unknown {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning-400);
+}
+
+/* Divider between cluster switcher and user menu */
+.topbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-primary);
+  flex-shrink: 0;
+}
+
+.cluster-dropdown-item:hover {
+  background-color: var(--bg-secondary) !important;
+}
+
+.topbar-user-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  box-shadow: var(--shadow-sm);
+}
+
+.topbar-user-btn:hover {
+  border-color: var(--primary-300);
+  box-shadow: var(--shadow-md);
+}
+
+.topbar-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-400), var(--accent-500));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.topbar-user-name {
+  font-weight: 500;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.topbar-role-badge {
+  display: inline-flex;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: var(--primary-50);
+  color: var(--primary-600);
+}
+
+[data-theme="dark"] .topbar-role-badge {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary-400);
+}
+
+.topbar-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  z-index: 200;
+  overflow: hidden;
+  animation: slideUp 0.15s ease;
+}
+
+.topbar-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.topbar-dropdown-item:hover {
+  background: var(--bg-hover);
+  color: var(--danger-500);
+}
+
+/* ---- Table Toolbar (search + action buttons) ---- */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.table-toolbar .table-search {
+  flex: 1;
+  max-width: 320px;
+  position: relative;
+}
+
+.table-toolbar .table-search input {
+  width: 100%;
+  padding: 7px 12px 7px 34px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.table-toolbar .table-search input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.table-toolbar .table-search input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.table-toolbar .table-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.table-toolbar .toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .page-header {
@@ -1363,6 +1630,7 @@ select.input option:checked {
 .fade-in {
   animation: fadeIn 0.3s ease;
 }
+
 
 /* ---- Utility ---- */
 .flex { display: flex; }

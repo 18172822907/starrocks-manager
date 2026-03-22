@@ -196,12 +196,6 @@ export default function VariablesPage() {
               )}
             </p>
           </div>
-          <div className="flex gap-2">
-            <CommandLogButton source="variables" title="变量管理" />
-            <button className="btn btn-secondary" onClick={() => fetchVariables(true)} disabled={loading || refreshing}>
-              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -224,11 +218,11 @@ export default function VariablesPage() {
           ))}
         </div>
 
-        {/* Search + Category filter */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="search-bar" style={{ flex: 1, minWidth: '200px', marginBottom: 0 }}>
-            <Search />
-            <input className="input" placeholder="搜索变量名或值..." value={search} onChange={e => setSearch(e.target.value)} />
+        {/* Search + Category filter + actions */}
+        <div className="table-toolbar">
+          <div className="table-search">
+            <Search size={15} className="table-search-icon" />
+            <input placeholder="搜索变量名或值..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Filter size={14} style={{ color: 'var(--text-tertiary)' }} />
@@ -243,6 +237,12 @@ export default function VariablesPage() {
                 <option key={c} value={c}>{(CATEGORY_ICONS[c]?.emoji || '📌')} {c}</option>
               ))}
             </select>
+          </div>
+          <div className="toolbar-actions">
+            <CommandLogButton source="variables" title="变量管理" />
+            <button className="btn btn-secondary" onClick={() => fetchVariables(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
+            </button>
           </div>
         </div>
 

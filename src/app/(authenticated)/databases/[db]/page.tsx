@@ -99,9 +99,6 @@ export default function DatabaseDetailPage() {
               {tableCountNum} 张表 · {viewCountNum} 个视图 · {mvCountNum} 个物化视图
             </p>
           </div>
-          <button className="btn btn-secondary" onClick={fetchTables}>
-            <RefreshCw size={16} /> 刷新
-          </button>
         </div>
       </div>
 
@@ -112,10 +109,10 @@ export default function DatabaseDetailPage() {
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }} className="mb-4">
-          <div className="search-bar" style={{ flex: 1, minWidth: '200px', marginBottom: 0 }}>
-            <Search />
-            <input className="input" placeholder="搜索表名..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="table-toolbar">
+          <div className="table-search">
+            <Search size={15} className="table-search-icon" />
+            <input placeholder="搜索表名..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div style={{ display: 'flex', gap: '4px' }}>
             {[
@@ -147,6 +144,11 @@ export default function DatabaseDetailPage() {
                 }}>{f.count}</span>
               </button>
             ))}
+          </div>
+          <div className="toolbar-actions">
+            <button className="btn btn-secondary" onClick={fetchTables}>
+              <RefreshCw size={16} /> 刷新
+            </button>
           </div>
         </div>
 

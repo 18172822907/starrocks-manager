@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSession } from '@/hooks/useSession';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Server,
   Cpu,
@@ -38,7 +39,11 @@ interface ProcessInfo {
 }
 
 export default function DashboardPage() {
-  const { session } = useSession();
+  const { session, clusterOffline, retryConnection, retrying } = useSession();
+  const { activeCluster, setClusterStatus } = useAuth();
+  // Dashboard needs its own sessionId from activeCluster (bypassing the offline gate)
+  // because it's the page that first detects and reports cluster failures
+  const clusterSessionId = activeCluster ? `${activeCluster.host}:${activeCluster.port}` : null;
   const [frontends, setFrontends] = useState<NodeInfo[]>([]);
   const [backends, setBackends] = useState<NodeInfo[]>([]);
   const [computeNodes, setComputeNodes] = useState<NodeInfo[]>([]);
@@ -57,53 +62,89 @@ export default function DashboardPage() {
   const queryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [countdown, setCountdown] = useState(60);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const [connectionFailed, setConnectionFailed] = useState(false);
+  const connectionFailedRef = useRef(false);
+
+  // Helper to mark connection as failed (both state + ref)
+
+  const markFailed = useCallback(() => {
+    connectionFailedRef.current = true;
+    setConnectionFailed(true);
+    setClusterStatus('offline');
+  }, [setClusterStatus]);
+
+  const markConnected = useCallback(() => {
+    connectionFailedRef.current = false;
+    setConnectionFailed(false);
+    setClusterStatus('online');
+  }, [setClusterStatus]);
 
   const fetchCluster = useCallback(async () => {
-    if (!session) return;
+    if (!clusterSessionId || connectionFailedRef.current) return;
     try {
-      const res = await fetch(`/api/cluster?sessionId=${encodeURIComponent(session.sessionId)}`);
+      const res = await fetch(`/api/cluster?sessionId=${encodeURIComponent(clusterSessionId)}`);
       const cluster = await res.json();
-      if (cluster.error) setError(cluster.error);
-      else {
+      if (cluster.error) {
+        setError(cluster.error);
+        // Detect connection failure — stop polling (503 = cluster unreachable)
+        if (!res.ok) {
+          markFailed();
+        }
+      } else {
         setFrontends(cluster.frontends || []);
         setBackends(cluster.backends || []);
         setComputeNodes(cluster.computeNodes || []);
         setBrokers(cluster.brokers || []);
+        // Connection successful — mark as online if was previously unknown/failed
+        if (!connectionFailedRef.current) {
+          setClusterStatus('online');
+        }
       }
-    } catch (err) { setError(String(err)); }
-  }, [session]);
+    } catch (err) {
+      setError(String(err));
+      markFailed();
+    }
+  }, [clusterSessionId, markFailed]);
 
   const fetchQueries = useCallback(async () => {
-    if (!session) return;
+    if (!session || connectionFailedRef.current) return;
     try {
       const res = await fetch(`/api/queries?sessionId=${encodeURIComponent(session.sessionId)}`);
       const data = await res.json();
-      setQueries(data.queries || []);
+      if (res.ok) {
+        setQueries(data.queries || []);
+      }
     } catch { /* ignore */ }
   }, [session]);
 
   const fetchAll = useCallback(async () => {
-    if (!session) return;
+    if (!clusterSessionId) return;
     try {
       await Promise.all([fetchCluster(), fetchQueries()]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [session, fetchCluster, fetchQueries]);
+  }, [clusterSessionId, fetchCluster, fetchQueries]);
 
-  // Initial load + cluster auto-refresh (30s)
+  // Initial load — only runs once per session
   useEffect(() => {
     fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clusterSessionId]);
+
+  // Cluster auto-refresh interval (30s) — stops on connectionFailed
+  useEffect(() => {
+    if (connectionFailed) return;
     const interval = setInterval(fetchCluster, 30000);
     return () => clearInterval(interval);
-  }, [fetchAll, fetchCluster]);
+  }, [fetchCluster, connectionFailed]);
 
-  // Independent query auto-refresh + countdown
+  // Independent query auto-refresh + countdown — stops when connectionFailed
   useEffect(() => {
     if (queryTimerRef.current) clearInterval(queryTimerRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
-    if (queryInterval > 0) {
+    if (queryInterval > 0 && !connectionFailed) {
       setCountdown(queryInterval);
       queryTimerRef.current = setInterval(() => {
         fetchQueries();
@@ -117,9 +158,12 @@ export default function DashboardPage() {
       if (queryTimerRef.current) clearInterval(queryTimerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
-  }, [queryInterval, fetchQueries]);
+  }, [queryInterval, fetchQueries, connectionFailed]);
 
   function handleRefresh() {
+    // Clear failure state to allow retry
+    markConnected();
+    setError('');
     setRefreshing(true);
     fetchAll();
     // Reset the query countdown timer so it restarts from full interval
@@ -217,7 +261,13 @@ export default function DashboardPage() {
             <h1 className="page-title">仪表盘</h1>
             <p className="page-description">集群概览 · {session?.host}:{session?.port}</p>
           </div>
-          <div className="flex gap-2">
+        </div>
+      </div>
+
+      <div className="page-body">
+        <div className="table-toolbar">
+          <div />
+          <div className="toolbar-actions">
             <CommandLogButton source="dashboard" title="仪表盘" />
             <button className="btn btn-secondary" onClick={handleRefresh} disabled={refreshing}>
               <RefreshCw size={16} className={refreshing ? 'animate-pulse' : ''} />
@@ -225,10 +275,32 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="page-body">
-        {error && (
+        {connectionFailed && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px',
+            padding: '14px 18px', marginBottom: '16px',
+            borderRadius: 'var(--radius-lg)',
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.2)',
+            color: 'var(--danger-500)',
+          }}>
+            <XCircle size={20} style={{ flexShrink: 0 }} />
+            <div style={{ flex: 1, fontSize: '0.88rem' }}>
+              <strong>集群连接不可用</strong>
+              <span style={{ color: 'var(--text-tertiary)', marginLeft: '8px' }}>
+                {session?.host}:{session?.port} 无法连接，自动刷新已暂停
+              </span>
+            </div>
+            <button className="btn btn-sm btn-secondary" onClick={() => {
+              setConnectionFailed(false);
+              setError('');
+              handleRefresh();
+            }}>
+              <RefreshCw size={14} /> 重试连接
+            </button>
+          </div>
+        )}
+        {error && !connectionFailed && (
           <div className="error-banner">{error}</div>
         )}
 

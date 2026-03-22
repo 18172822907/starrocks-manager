@@ -84,10 +84,6 @@ export default function PrivilegesPage() {
             <h1 className="page-title">权限管理</h1>
             <p className="page-description">查看和管理数据库权限</p>
           </div>
-          <div className="flex gap-2">
-            <button className="btn btn-secondary" onClick={fetchPrivileges}><RefreshCw size={16} /> 刷新</button>
-            <button className="btn btn-primary" onClick={() => setShowGrant(true)}><Plus size={16} /> 授权 / 撤权</button>
-          </div>
         </div>
       </div>
 
@@ -95,9 +91,15 @@ export default function PrivilegesPage() {
         {error && <div style={{ color: 'var(--danger-500)', marginBottom: '16px', padding: '10px 14px', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>{error}</div>}
         {success && <div className="toast toast-success">{success}</div>}
 
-        <div className="search-bar mb-4">
-          <Search />
-          <input className="input" placeholder="搜索用户或权限..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="table-toolbar">
+          <div className="table-search">
+            <Search size={15} className="table-search-icon" />
+            <input placeholder="搜索用户或权限..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="toolbar-actions">
+            <button className="btn btn-secondary" onClick={fetchPrivileges}><RefreshCw size={16} /> 刷新</button>
+            <button className="btn btn-primary" onClick={() => setShowGrant(true)}><Plus size={16} /> 授权 / 撤权</button>
+          </div>
         </div>
 
         {loading ? (

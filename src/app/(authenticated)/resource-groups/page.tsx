@@ -306,15 +306,6 @@ export default function ResourceGroupsPage() {
               )}
             </p>
           </div>
-          <div className="flex gap-2">
-            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-              <Plus size={16} /> 创建资源组
-            </button>
-            <CommandLogButton source="resource-groups" title="资源组管理" />
-            <button className="btn btn-secondary" onClick={() => fetchGroups(true)} disabled={loading || refreshing}>
-              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -326,9 +317,20 @@ export default function ResourceGroupsPage() {
         )}
         {success && <div className="toast toast-success">{success}</div>}
 
-        <div className="search-bar mb-4">
-          <Search />
-          <input className="input" placeholder="搜索资源组..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="table-toolbar">
+          <div className="table-search">
+            <Search size={15} className="table-search-icon" />
+            <input placeholder="搜索资源组..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="toolbar-actions">
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+              <Plus size={16} /> 创建资源组
+            </button>
+            <CommandLogButton source="resource-groups" title="资源组管理" />
+            <button className="btn btn-secondary" onClick={() => fetchGroups(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} /> {refreshing ? '刷新中...' : '刷新'}
+            </button>
+          </div>
         </div>
 
         {loading ? (
