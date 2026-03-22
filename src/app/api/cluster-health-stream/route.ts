@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getLocalDb } from '@/lib/local-db';
-import { clearConnectionFailure } from '@/lib/db';
+import { clearConnectionFailure, getPool } from '@/lib/db';
 import { validateSession, getAuthFromRequest } from '@/lib/auth';
 import mysql from 'mysql2/promise';
 
@@ -17,7 +17,8 @@ interface ClusterRow {
 /**
  * SSE endpoint that streams cluster health status updates.
  * - Checks all clusters every 20 seconds
- * - Only emits when status changes to avoid noise
+ * - Reuses existing connection pools where available
+ * - Falls back to lightweight direct connection for unconnected clusters
  * - Authenticated: requires valid session cookie
  */
 export async function GET(request: NextRequest) {
@@ -32,7 +33,6 @@ export async function GET(request: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      // Track last known status per cluster to detect changes
       const lastStatus: Record<number, string> = {};
 
       const sendEvent = (data: unknown) => {
@@ -59,23 +59,37 @@ export async function GET(request: NextRequest) {
               let status = 'offline';
               let version: string | undefined;
 
-              let conn;
-              try {
-                conn = await mysql.createConnection({
-                  host: c.host,
-                  port: c.port,
-                  user: c.username,
-                  password: c.password,
-                  connectTimeout: 3000,
-                });
-                const [rows] = await conn.query('SELECT version() as v');
-                const row = (rows as Array<{ v: string }>)[0];
-                version = row?.v;
-                status = 'online';
-                clearConnectionFailure(sessionId);
-              } catch { /* offline */ }
-              finally {
-                if (conn) try { await conn.end(); } catch { /* ignore */ }
+              // Strategy: try pool first (zero-cost), fall back to direct connection
+              const pool = getPool(sessionId);
+              if (pool) {
+                // ── Pool available: reuse existing connection ──
+                try {
+                  const [rows] = await pool.query('SELECT version() as v');
+                  const row = (rows as Array<{ v: string }>)[0];
+                  version = row?.v;
+                  status = 'online';
+                  clearConnectionFailure(sessionId);
+                } catch { /* pool query failed — cluster offline */ }
+              } else {
+                // ── No pool: lightweight direct connection ──
+                let conn;
+                try {
+                  conn = await mysql.createConnection({
+                    host: c.host,
+                    port: c.port,
+                    user: c.username,
+                    password: c.password,
+                    connectTimeout: 3000,
+                  });
+                  const [rows] = await conn.query('SELECT version() as v');
+                  const row = (rows as Array<{ v: string }>)[0];
+                  version = row?.v;
+                  status = 'online';
+                  clearConnectionFailure(sessionId);
+                } catch { /* offline */ }
+                finally {
+                  if (conn) try { await conn.end(); } catch { /* ignore */ }
+                }
               }
 
               results[c.id] = {
@@ -84,7 +98,6 @@ export async function GET(request: NextRequest) {
                 checkedAt: new Date().toISOString(),
               };
 
-              // Detect change
               if (lastStatus[c.id] !== status) {
                 hasChanges = true;
                 lastStatus[c.id] = status;
@@ -92,16 +105,11 @@ export async function GET(request: NextRequest) {
             })
           );
 
-          // Always send on first check, then only on changes
-          const isFirst = Object.keys(lastStatus).length === clusters.length
-            && Object.values(lastStatus).some((_, i) => i === 0);
-
-          if (hasChanges || !Object.keys(lastStatus).length) {
-            sendEvent({ type: 'health-update', clusters: results });
-          } else {
-            // Send heartbeat with current status to keep connection alive
-            sendEvent({ type: 'heartbeat', clusters: results });
-          }
+          // Always send results (either health-update on change, or heartbeat)
+          sendEvent({
+            type: hasChanges ? 'health-update' : 'heartbeat',
+            clusters: results,
+          });
         } catch {
           // DB error, skip this cycle
         }
