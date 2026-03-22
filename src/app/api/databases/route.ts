@@ -29,16 +29,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ── Fetch fresh from StarRocks (optimized: 3 queries instead of 2N) ──
+    // ── Fetch fresh from StarRocks (all 3 queries in parallel) ──
+    const [dbResult, tableAgg, mvAgg] = await Promise.all([
+      // 1) Get all database names
+      executeQuery(sessionId, 'SHOW DATABASES', undefined, 'databases'),
 
-    // 1) Get all database names
-    const dbResult = await executeQuery(sessionId, 'SHOW DATABASES', undefined, 'databases');
-    const dbNames = dbResult.rows.map((r: Record<string, unknown>) =>
-      String(r['Database'] || r['database'] || Object.values(r)[0])
-    );
-
-    // 2) Aggregated table/view counts per schema (single query for ALL databases)
-    const [tableAgg, mvAgg] = await Promise.all([
+      // 2) Aggregated table/view counts per schema
       executeQuery(
         sessionId,
         `SELECT TABLE_SCHEMA, TABLE_TYPE, COUNT(*) AS cnt
@@ -47,7 +43,7 @@ export async function GET(request: NextRequest) {
         undefined, 'databases'
       ).catch(() => ({ rows: [], fields: [] })),
 
-      // MV names per schema (StarRocks stores MVs as BASE TABLE in tables, need MV table to distinguish)
+      // 3) MV counts per schema
       executeQuery(
         sessionId,
         `SELECT TABLE_SCHEMA, COUNT(*) AS cnt
@@ -56,6 +52,10 @@ export async function GET(request: NextRequest) {
         undefined, 'databases'
       ).catch(() => ({ rows: [], fields: [] })),
     ]);
+
+    const dbNames = dbResult.rows.map((r: Record<string, unknown>) =>
+      String(r['Database'] || r['database'] || Object.values(r)[0])
+    );
 
     // 3) Build counts map from aggregated results
     // tableCountMap[schema] = { tables: N, views: N }
