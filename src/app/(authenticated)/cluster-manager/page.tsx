@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader, ErrorBanner, SuccessToast, DataTable } from '@/components/ui';
-import { Network, Plus, Zap, Trash2, Pencil, X, Check, AlertCircle, RefreshCw } from 'lucide-react';
+import { Network, Plus, Zap, Trash2, Pencil, X, Check, AlertCircle, RefreshCw, Power } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
@@ -20,6 +20,12 @@ interface Cluster {
   userCount?: number;
 }
 
+interface HealthResult {
+  status: 'online' | 'offline' | 'checking' | 'unknown';
+  version?: string;
+  checkedAt?: string; // ISO timestamp
+}
+
 export default function ClusterManagerPage() {
   const { user, activeCluster, switchCluster, refreshAuth } = useAuth();
   const [clusters, setClusters] = useState<Cluster[]>([]);
@@ -29,8 +35,11 @@ export default function ClusterManagerPage() {
   const [showModal, setShowModal] = useState(false);
   const [editCluster, setEditCluster] = useState<Cluster | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
-  const [testing, setTesting] = useState<number | null>(null);
-  const [testResult, setTestResult] = useState<Record<number, { ok: boolean; msg: string }>>({});
+  const [activating, setActivating] = useState<number | null>(null);
+
+  // Health status per cluster
+  const [healthMap, setHealthMap] = useState<Record<number, HealthResult>>({});
+  const healthAbortRef = useRef<AbortController | null>(null);
 
   // Form state
   const [form, setForm] = useState({
@@ -46,11 +55,63 @@ export default function ClusterManagerPage() {
       const data = await res.json();
       if (data.error) { setError(data.error); return; }
       setClusters(data.clusters || []);
+      return data.clusters || [];
     } catch (err) { setError(String(err)); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchClusters(); }, [fetchClusters]);
+  // Check health for a single cluster
+  const checkHealth = useCallback(async (c: Cluster, signal?: AbortSignal) => {
+    const sessionId = `${c.host}:${c.port}`;
+    setHealthMap(prev => ({ ...prev, [c.id]: { ...prev[c.id], status: 'checking' } }));
+    try {
+      const res = await fetch(
+        `/api/health?sessionId=${encodeURIComponent(sessionId)}`,
+        { signal }
+      );
+      const data = await res.json();
+      setHealthMap(prev => ({
+        ...prev,
+        [c.id]: {
+          status: data.ok ? 'online' : 'offline',
+          version: data.version,
+          checkedAt: new Date().toISOString(),
+        },
+      }));
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+      setHealthMap(prev => ({
+        ...prev,
+        [c.id]: {
+          status: 'offline',
+          checkedAt: new Date().toISOString(),
+        },
+      }));
+    }
+  }, []);
+
+  // Check all cluster health
+  const checkAllHealth = useCallback(async (clusterList?: Cluster[]) => {
+    const list = clusterList || clusters;
+    if (list.length === 0) return;
+    // Abort any in-progress checks
+    if (healthAbortRef.current) healthAbortRef.current.abort();
+    const controller = new AbortController();
+    healthAbortRef.current = controller;
+
+    // Check all in parallel
+    await Promise.allSettled(
+      list.map(c => checkHealth(c, controller.signal))
+    );
+  }, [clusters, checkHealth]);
+
+  useEffect(() => {
+    fetchClusters().then(list => {
+      if (list && list.length > 0) checkAllHealth(list);
+    });
+    return () => { healthAbortRef.current?.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function openCreate() {
     setEditCluster(null);
@@ -113,7 +174,8 @@ export default function ClusterManagerPage() {
         setShowModal(false);
         setSuccess(editCluster ? '集群已更新' : '集群已创建');
         setTimeout(() => setSuccess(''), 3000);
-        fetchClusters();
+        const list = await fetchClusters();
+        if (list) checkAllHealth(list);
         refreshAuth();
       }
     } catch (err) { setFormError(String(err)); }
@@ -139,30 +201,22 @@ export default function ClusterManagerPage() {
     finally { setDeleteConfirm(null); }
   }
 
-  async function handleTestExisting(id: number) {
-    setTesting(id);
-    const c = clusters.find(cl => cl.id === id);
-    if (!c) return;
+  async function handleActivate(id: number) {
+    setActivating(id);
     try {
-      const res = await fetch('/api/clusters', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'test', host: c.host, port: c.port, username: c.username, password: c.password }),
-      });
-      const data = await res.json();
-      setTestResult(prev => ({ ...prev, [id]: { ok: data.success, msg: data.success ? `v${data.version}` : (data.error || '连接失败') } }));
-    } catch (err) {
-      setTestResult(prev => ({ ...prev, [id]: { ok: false, msg: String(err) } }));
+      await switchCluster(id);
+      setSuccess('已切换到该集群');
+      setTimeout(() => setSuccess(''), 3000);
+      refreshAuth();
+    } finally {
+      setActivating(null);
     }
-    finally { setTesting(null); }
   }
 
-  async function handleActivate(id: number) {
-    await switchCluster(id);
-    setSuccess('已切换到该集群');
-    setTimeout(() => setSuccess(''), 3000);
-    // Refresh to update connection status
-    refreshAuth();
+  async function handleRefresh() {
+    setLoading(true);
+    const list = await fetchClusters();
+    if (list) await checkAllHealth(list);
   }
 
   const [search, setSearch] = useState('');
@@ -171,7 +225,11 @@ export default function ClusterManagerPage() {
     !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.host.includes(search)
   );
 
-  // ... (rest handled below)
+  function formatCheckTime(iso?: string) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+  }
 
   if (user?.role !== 'admin') {
     return (
@@ -200,7 +258,7 @@ export default function ClusterManagerPage() {
             />
           </div>
           <div className="toolbar-actions">
-            <button className="btn btn-secondary" onClick={fetchClusters} disabled={loading}>
+            <button className="btn btn-secondary" onClick={handleRefresh} disabled={loading}>
               <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
               刷新
             </button>
@@ -217,52 +275,85 @@ export default function ClusterManagerPage() {
               <th>集群名称</th>
               <th>地址</th>
               <th>用户名</th>
-              <th>状态</th>
+              <th>连接状态</th>
               <th>描述</th>
-              <th style={{ width: '200px', textAlign: 'center' }}>操作</th>
+              <th style={{ width: '220px', textAlign: 'center' }}>操作</th>
             </tr>
           </thead>
           <tbody>
-            {filteredClusters.map((c, i) => (
-              <tr key={c.id}>
-                <td style={{ textAlign: 'center', color: 'var(--text-tertiary)' }}>{i + 1}</td>
-                <td>
-                  <div style={{ fontWeight: 600 }}>{c.name}</div>
-                </td>
-                <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{c.host}:{c.port}</td>
-                <td>{c.username}</td>
-                <td>
-                  {activeCluster?.id === c.id ? (
-                    <span className="status-badge status-green">● 已激活</span>
-                  ) : testResult[c.id] ? (
-                    <span className={`status-badge ${testResult[c.id].ok ? 'status-green' : 'status-red'}`}>
-                      {testResult[c.id].ok ? `✓ ${testResult[c.id].msg}` : `✗ ${testResult[c.id].msg}`}
-                    </span>
-                  ) : (
-                    <span className="status-badge status-gray">未连接</span>
-                  )}
-                </td>
-                <td style={{ color: 'var(--text-tertiary)', fontSize: '0.82rem' }}>{c.description || '—'}</td>
-                <td style={{ textAlign: 'center' }}>
-                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                    {activeCluster?.id !== c.id && (
-                      <button className="btn btn-sm btn-primary" onClick={() => handleActivate(c.id)} title="激活">
-                        <Check size={14} /> 激活
+            {filteredClusters.map((c, i) => {
+              const health = healthMap[c.id] || { status: 'unknown' as const };
+              const isActive = activeCluster?.id === c.id;
+              return (
+                <tr key={c.id}>
+                  <td style={{ textAlign: 'center', color: 'var(--text-tertiary)' }}>{i + 1}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontWeight: 600 }}>{c.name}</span>
+                      {isActive && (
+                        <span style={{
+                          fontSize: '0.65rem', padding: '1px 6px', borderRadius: '99px',
+                          background: 'var(--primary-50)', color: 'var(--primary-600)',
+                          fontWeight: 600, letterSpacing: '0.02em',
+                        }}>当前</span>
+                      )}
+                    </div>
+                  </td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{c.host}:{c.port}</td>
+                  <td>{c.username}</td>
+                  <td>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      {health.status === 'checking' ? (
+                        <span className="status-badge status-yellow">
+                          <span className="spinner" style={{ width: '10px', height: '10px' }} /> 检测中
+                        </span>
+                      ) : health.status === 'online' ? (
+                        <span className="status-badge status-green">● 在线{health.version ? ` (${health.version})` : ''}</span>
+                      ) : health.status === 'offline' ? (
+                        <span className="status-badge status-red">● 离线</span>
+                      ) : (
+                        <span className="status-badge status-gray">● 未检测</span>
+                      )}
+                      {health.checkedAt && (
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)' }}>
+                          检测 {formatCheckTime(health.checkedAt)}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td style={{ color: 'var(--text-tertiary)', fontSize: '0.82rem' }}>{c.description || '—'}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                      {isActive ? (
+                        <button className="btn btn-sm btn-secondary" disabled style={{ opacity: 0.5 }}>
+                          <Check size={14} /> 已激活
+                        </button>
+                      ) : (
+                        <button className="btn btn-sm btn-primary" onClick={() => handleActivate(c.id)}
+                          disabled={activating === c.id}>
+                          {activating === c.id
+                            ? <span className="spinner" style={{ width: '14px', height: '14px' }} />
+                            : <Power size={14} />}
+                          {' '}激活
+                        </button>
+                      )}
+                      <button className="btn btn-sm btn-secondary" onClick={() => checkHealth(c)} title="检测连接"
+                        disabled={health.status === 'checking'}>
+                        {health.status === 'checking'
+                          ? <span className="spinner" style={{ width: '14px', height: '14px' }} />
+                          : <Zap size={14} />}
                       </button>
-                    )}
-                    <button className="btn btn-sm btn-secondary" onClick={() => handleTestExisting(c.id)} disabled={testing === c.id} title="测试连接">
-                      {testing === c.id ? <span className="spinner" style={{ width: '14px', height: '14px' }} /> : <Zap size={14} />}
-                    </button>
-                    <button className="btn btn-sm btn-secondary" onClick={() => openEdit(c)} title="编辑">
-                      <Pencil size={14} />
-                    </button>
-                    <button className="btn btn-sm btn-danger-ghost" onClick={() => setDeleteConfirm(c.id)} title="删除" disabled={activeCluster?.id === c.id}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      <button className="btn btn-sm btn-secondary" onClick={() => openEdit(c)} title="编辑">
+                        <Pencil size={14} />
+                      </button>
+                      <button className="btn btn-sm btn-danger-ghost" onClick={() => setDeleteConfirm(c.id)} title="删除" disabled={isActive}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </DataTable>
       </div>
