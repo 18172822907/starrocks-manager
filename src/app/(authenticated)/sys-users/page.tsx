@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader, ErrorBanner, SuccessToast, DataTable } from '@/components/ui';
-import { UserCog, Plus, Trash2, Pencil, X, Check, AlertCircle, ShieldCheck, Eye, Edit3, RefreshCw, Search } from 'lucide-react';
+import { UserCog, Plus, Trash2, Pencil, X, Check, AlertCircle, ShieldCheck, Eye, Edit3, RefreshCw, Search, Lock } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
@@ -252,6 +252,9 @@ export default function SysUsersPage() {
             <label className="form-label">密码 {editUser && <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>(留空则不修改)</span>}</label>
             <input className="input" type="password" placeholder={editUser ? '留空则不修改' : '设置密码'}
               value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '4px', lineHeight: 1.5 }}>
+              密码要求：至少 8 位，包含大小写字母、数字、特殊字符
+            </div>
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">显示名称</label>
@@ -259,23 +262,36 @@ export default function SysUsersPage() {
               onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">角色 *</label>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              角色 *
+              {editUser?.username === 'admin' && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
+                  <Lock size={10} /> 内置管理员不可修改
+                </span>
+              )}
+            </label>
             <div style={{ display: 'flex', gap: '8px' }}>
-              {ROLE_OPTIONS.map(r => (
-                <button key={r.value} type="button"
-                  onClick={() => setForm(f => ({ ...f, role: r.value }))}
-                  style={{
-                    flex: 1, padding: '8px 6px', borderRadius: 'var(--radius-md)',
-                    border: form.role === r.value ? `2px solid ${r.color}` : '1px solid var(--border-secondary)',
-                    backgroundColor: form.role === r.value ? `${r.color}10` : 'var(--bg-secondary)',
-                    cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s',
-                  }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: form.role === r.value ? r.color : 'var(--text-primary)' }}>
-                    {r.label}
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>{r.desc}</div>
-                </button>
-              ))}
+              {ROLE_OPTIONS.map(r => {
+                const isAdminLocked = editUser?.username === 'admin';
+                const isSelected = form.role === r.value;
+                return (
+                  <button key={r.value} type="button"
+                    onClick={() => !isAdminLocked && setForm(f => ({ ...f, role: r.value }))}
+                    disabled={isAdminLocked}
+                    style={{
+                      flex: 1, padding: '8px 6px', borderRadius: 'var(--radius-md)',
+                      border: isSelected ? `2px solid ${r.color}` : '1px solid var(--border-secondary)',
+                      backgroundColor: isSelected ? `${r.color}10` : 'var(--bg-secondary)',
+                      cursor: isAdminLocked ? 'not-allowed' : 'pointer', textAlign: 'center', transition: 'all 0.15s',
+                      opacity: isAdminLocked && !isSelected ? 0.4 : 1,
+                    }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: isSelected ? r.color : 'var(--text-primary)' }}>
+                      {r.label}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>{r.desc}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
           {form.role !== 'admin' && (

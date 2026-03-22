@@ -3,6 +3,16 @@ import { getLocalDb } from '@/lib/local-db';
 import { requireRole, AuthError, hashPassword } from '@/lib/auth';
 import type { SysUser } from '@/lib/auth';
 
+// Password complexity: min 8 chars, must contain upper + lower + digit + special
+function validatePassword(pwd: string): string | null {
+  if (pwd.length < 8) return '密码长度至少 8 位';
+  if (!/[A-Z]/.test(pwd)) return '密码必须包含大写字母';
+  if (!/[a-z]/.test(pwd)) return '密码必须包含小写字母';
+  if (!/[0-9]/.test(pwd)) return '密码必须包含数字';
+  if (!/[^A-Za-z0-9]/.test(pwd)) return '密码必须包含特殊字符（如 !@#$%）';
+  return null;
+}
+
 // GET /api/sys-users — list system users (admin only)
 export async function GET(request: NextRequest) {
   try {
@@ -41,6 +51,12 @@ export async function POST(request: NextRequest) {
     }
     if (!['admin', 'editor', 'viewer'].includes(role || '')) {
       return NextResponse.json({ error: '无效角色' }, { status: 400 });
+    }
+
+    // Password complexity check
+    const pwdErr = validatePassword(password);
+    if (pwdErr) {
+      return NextResponse.json({ error: pwdErr }, { status: 400 });
     }
 
     const db = getLocalDb();
@@ -94,6 +110,27 @@ export async function PUT(request: NextRequest) {
       const adminCount = db.prepare("SELECT COUNT(*) as cnt FROM sys_users WHERE role = 'admin' AND is_active = 1").get() as { cnt: number };
       if (adminCount.cnt <= 1) {
         return NextResponse.json({ error: '不能禁用最后一个管理员账号' }, { status: 400 });
+      }
+    }
+
+    // Prevent changing the built-in admin user's role
+    if (role !== undefined && role !== user.role && user.username === 'admin') {
+      return NextResponse.json({ error: '内置管理员账号的角色不可修改' }, { status: 400 });
+    }
+
+    // Prevent role downgrade that would leave zero admins
+    if (role !== undefined && role !== 'admin' && user.role === 'admin') {
+      const adminCount = db.prepare("SELECT COUNT(*) as cnt FROM sys_users WHERE role = 'admin' AND is_active = 1").get() as { cnt: number };
+      if (adminCount.cnt <= 1) {
+        return NextResponse.json({ error: '不能修改最后一个管理员的角色' }, { status: 400 });
+      }
+    }
+
+    // Password complexity check
+    if (password) {
+      const pwdErr = validatePassword(password);
+      if (pwdErr) {
+        return NextResponse.json({ error: pwdErr }, { status: 400 });
       }
     }
 
