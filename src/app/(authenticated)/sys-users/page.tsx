@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader, ErrorBanner, SuccessToast, DataTable } from '@/components/ui';
-import { UserCog, Plus, Trash2, Pencil, X, Check, AlertCircle, ShieldCheck, Eye, Edit3 } from 'lucide-react';
+import { UserCog, Plus, Trash2, Pencil, X, Check, AlertCircle, ShieldCheck, Eye, Edit3, RefreshCw, Search } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
@@ -40,6 +40,12 @@ export default function SysUsersPage() {
   });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [search, setSearch] = useState('');
+
+  const filteredUsers = users.filter(u =>
+    !search || u.username.toLowerCase().includes(search.toLowerCase()) ||
+    u.display_name.toLowerCase().includes(search.toLowerCase())
+  );
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -151,13 +157,23 @@ export default function SysUsersPage() {
     <>
       <PageHeader title="系统用户" breadcrumb={[{ label: '系统管理' }, { label: '系统用户' }]}
         description={<>管理系统登录账号 · {users.length} 个用户</>}
-        onRefresh={fetchUsers} loading={loading}
-        actions={<button className="btn btn-primary" onClick={openCreate}><Plus size={16} /> 创建用户</button>}
       />
       <div className="page-body">
         <ErrorBanner error={error} />
         <SuccessToast message={success} />
-        <DataTable loading={loading} empty={users.length === 0} emptyIcon={<UserCog size={48} />} emptyText="暂无用户"
+        <div className="table-toolbar">
+          <div className="table-search">
+            <Search size={14} className="table-search-icon" />
+            <input placeholder="搜索用户名或显示名..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="toolbar-actions">
+            <button className="btn btn-secondary" onClick={fetchUsers} disabled={loading}>
+              <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> 刷新
+            </button>
+            <button className="btn btn-primary" onClick={openCreate}><Plus size={16} /> 创建用户</button>
+          </div>
+        </div>
+        <DataTable loading={loading} empty={filteredUsers.length === 0} emptyIcon={<UserCog size={48} />} emptyText="暂无用户"
           footerLeft={<>共 <strong style={{ color: 'var(--text-secondary)' }}>{users.length}</strong> 个用户</>}>
           <thead>
             <tr>
@@ -172,7 +188,7 @@ export default function SysUsersPage() {
             </tr>
           </thead>
           <tbody>
-            {users.map((u, i) => {
+            {filteredUsers.map((u, i) => {
               const role = roleOpt(u.role);
               return (
                 <tr key={u.id} style={{ opacity: u.is_active ? 1 : 0.5 }}>
@@ -193,14 +209,14 @@ export default function SysUsersPage() {
                     {u.role === 'admin' ? '全部' : u.clusters.length > 0 ? u.clusters.map(c => c.name).join(', ') : '—'}
                   </td>
                   <td>
-                    <button
+                    <span
                       className={`status-badge ${u.is_active ? 'status-green' : 'status-red'}`}
-                      style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0 }}
+                      style={{ cursor: 'pointer' }}
                       onClick={() => handleToggleActive(u)}
                       title={u.is_active ? '点击禁用' : '点击启用'}
                     >
                       {u.is_active ? '● 已启用' : '● 已禁用'}
-                    </button>
+                    </span>
                   </td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
                     {u.last_login_at || '从未登录'}
