@@ -158,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ========== Background health probe ==========
   // When cluster is offline, periodically ping /api/health to detect recovery.
-  // Once the cluster responds successfully, auto-restore to 'online'.
+  // Only runs in the currently visible tab to avoid duplicate requests.
   useEffect(() => {
     // Clear any existing timer
     if (probeTimerRef.current) {
@@ -172,6 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const sessionId = `${activeCluster.host}:${activeCluster.port}`;
 
     const probe = async () => {
+      // Skip if tab is hidden (other tabs may be probing the same cluster)
+      if (document.hidden) return;
       try {
         const res = await fetch(`/api/health?sessionId=${encodeURIComponent(sessionId)}`);
         const data = await res.json();
@@ -183,8 +185,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch { /* still offline, keep probing */ }
     };
 
-    // Probe every 30 seconds
-    probeTimerRef.current = setInterval(probe, 30_000);
+    // Probe every 60 seconds (reduced from 30s to avoid excessive 503s)
+    probeTimerRef.current = setInterval(probe, 60_000);
 
     return () => {
       if (probeTimerRef.current) {

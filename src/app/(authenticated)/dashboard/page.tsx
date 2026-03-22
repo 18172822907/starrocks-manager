@@ -40,7 +40,7 @@ interface ProcessInfo {
 
 export default function DashboardPage() {
   const { session, clusterOffline, retryConnection, retrying } = useSession();
-  const { activeCluster, setClusterStatus } = useAuth();
+  const { activeCluster, clusterStatus, setClusterStatus } = useAuth();
   // Dashboard needs its own sessionId from activeCluster (bypassing the offline gate)
   // because it's the page that first detects and reports cluster failures
   const clusterSessionId = activeCluster ? `${activeCluster.host}:${activeCluster.port}` : null;
@@ -80,7 +80,7 @@ export default function DashboardPage() {
   }, [setClusterStatus]);
 
   const fetchCluster = useCallback(async () => {
-    if (!clusterSessionId || connectionFailedRef.current) return;
+    if (!clusterSessionId || connectionFailedRef.current || clusterStatus === 'unknown') return;
     try {
       const res = await fetch(`/api/cluster?sessionId=${encodeURIComponent(clusterSessionId)}`);
       const cluster = await res.json();
@@ -104,10 +104,10 @@ export default function DashboardPage() {
       setError(String(err));
       markFailed();
     }
-  }, [clusterSessionId, markFailed]);
+  }, [clusterSessionId, markFailed, clusterStatus]);
 
   const fetchQueries = useCallback(async () => {
-    if (!session || connectionFailedRef.current) return;
+    if (!session || connectionFailedRef.current || clusterStatus === 'unknown') return;
     try {
       const res = await fetch(`/api/queries?sessionId=${encodeURIComponent(session.sessionId)}`);
       const data = await res.json();
