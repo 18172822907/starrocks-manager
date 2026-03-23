@@ -4,9 +4,9 @@ import React, { useState } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { useDataFetch } from '@/hooks/useDataFetch';
 import { str } from '@/lib/utils';
-import { PageHeader, VersionBadge, ErrorBanner, SuccessToast, Modal, SqlPreview } from '@/components/ui';
+import { PageHeader, VersionBadge, ErrorBanner, SuccessToast, Modal, SqlPreview, CommandLogButton } from '@/components/ui';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { Server, Plus, Trash2, Cpu, HardDrive, Activity, AlertTriangle, Network } from 'lucide-react';
+import { Server, Plus, Trash2, Cpu, HardDrive, Activity, AlertTriangle, Network, RefreshCw } from 'lucide-react';
 
 function StatusDot({ alive }: { alive: boolean }) {
   return (
@@ -93,25 +93,32 @@ export default function NodesPage() {
       <PageHeader title="节点管理"
         breadcrumb={[{ label: '系统管理' }, { label: '节点管理' }]}
         description={<>管理集群 FE / CN / Broker 节点 · <span style={{ color: feAlive === frontends.length ? 'var(--success-600)' : 'var(--warning-600)' }}>FE {feAlive}/{frontends.length}</span> · <span style={{ color: cnAlive === computeNodes.length ? 'var(--success-600)' : 'var(--warning-600)' }}>CN {cnAlive}/{computeNodes.length}</span>{brokers.length > 0 && <> · <span style={{ color: brokerAlive === brokers.length ? 'var(--success-600)' : 'var(--warning-600)' }}>Broker {brokerAlive}/{brokers.length}</span></>}{backends.length > 0 && <> · BE {backends.length}</>}</>}
-        onRefresh={() => refresh(true)} refreshing={refreshing} loading={loading}
-        logSource="nodes"
-        actions={<button className="btn btn-primary" onClick={() => setShowAdd(true)}><Plus size={16} /> 添加节点</button>}
       />
       <div className="page-body">
         <ErrorBanner error={error} />
         <SuccessToast message={success} />
 
-        {/* Tabs */}
-        <div className="underline-tabs">
-          {[
-            { key: 'fe' as const, label: `FE 节点 (${frontends.length})`, icon: <Server size={14} /> },
-            { key: 'cn' as const, label: `CN 节点 (${computeNodes.length})`, icon: <Cpu size={14} /> },
-            { key: 'broker' as const, label: `Broker (${brokers.length})`, icon: <Network size={14} /> },
-          ].map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)} className={`underline-tab ${tab === t.key ? 'active' : ''}`}>
-              {t.icon} {t.label}
+        {/* Tabs + Toolbar */}
+        <div className="table-toolbar">
+          <div className="underline-tabs" style={{ marginBottom: 0 }}>
+            {[
+              { key: 'fe' as const, label: `FE 节点 (${frontends.length})`, icon: <Server size={14} /> },
+              { key: 'cn' as const, label: `CN 节点 (${computeNodes.length})`, icon: <Cpu size={14} /> },
+              { key: 'broker' as const, label: `Broker (${brokers.length})`, icon: <Network size={14} /> },
+            ].map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)} className={`underline-tab ${tab === t.key ? 'active' : ''}`}>
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="toolbar-actions">
+            <CommandLogButton source="nodes" title="节点管理" />
+            <button className="btn btn-secondary" onClick={() => refresh(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} />
+              {refreshing ? '刷新中...' : '刷新'}
             </button>
-          ))}
+            <button className="btn btn-primary" onClick={() => setShowAdd(true)}><Plus size={16} /> 添加节点</button>
+          </div>
         </div>
 
         {loading ? (
