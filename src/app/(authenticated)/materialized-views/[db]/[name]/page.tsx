@@ -410,18 +410,16 @@ export default function MVDetailPage() {
                 ) : taskRuns.length === 0 ? (
                   <div className="empty-state"><div className="empty-state-text">暂无执行记录</div></div>
                 ) : (
-                  <div className="table-container" style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', tableLayout: 'auto' }}>
+                  <div className="table-container">
+                    <table style={{ width: '100%' }}>
                       <thead>
                         <tr>
                           <th style={{ width: '36px', textAlign: 'center' }}>#</th>
-                          <th style={{ minWidth: '60px' }}>状态</th>
-                          <th style={{ minWidth: '130px' }}>开始时间</th>
-                          <th style={{ minWidth: '130px' }}>结束时间</th>
-                          <th style={{ minWidth: '50px' }}>耗时</th>
-                          <th style={{ minWidth: '70px' }}>进度</th>
-                          <th style={{ minWidth: '200px' }}>错误信息</th>
-                          <th>刷新信息</th>
+                          <th style={{ width: '80px' }}>状态</th>
+                          <th style={{ width: '160px' }}>开始时间</th>
+                          <th style={{ width: '160px' }}>结束时间</th>
+                          <th style={{ width: '70px' }}>耗时</th>
+                          <th style={{ width: '60px' }}>进度</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -432,7 +430,7 @@ export default function MVDetailPage() {
                           const finishTime = str(run.FINISH_TIME);
                           const progress = str(run.PROGRESS);
                           const errorMsg = str(run.ERROR_MESSAGE);
-                          const extraMsg = str(run.EXTRA_MESSAGE);
+                          const isFailed = state === 'FAILED';
 
                           const fmtDate = (d: string) => {
                             if (!d) return '';
@@ -452,35 +450,47 @@ export default function MVDetailPage() {
                           }
 
                           return (
-                            <tr key={i}>
-                              <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.76rem' }}>{i + 1}</td>
-                              <td>
-                                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: stStyle.color }}>
-                                  {state}
-                                </span>
-                              </td>
-                              <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmtDate(createTime)}</td>
-                              <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmtDate(finishTime)}</td>
-                              <td style={{ fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{duration}</td>
-                              <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{progress}</td>
-                              <td>
-                                {errorMsg ? (
-                                  <div style={{
-                                    fontSize: '0.75rem', color: 'var(--danger-500)', lineHeight: 1.5,
-                                    maxHeight: '80px', overflow: 'auto', wordBreak: 'break-all',
-                                    padding: '4px 8px', borderRadius: 'var(--radius-sm)',
-                                    background: 'rgba(239,68,68,0.05)',
+                            <React.Fragment key={i}>
+                              <tr style={{ borderBottom: isFailed && errorMsg ? 'none' : undefined }}>
+                                <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.76rem' }}>{i + 1}</td>
+                                <td>
+                                  <span style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                    fontSize: '0.76rem', fontWeight: 600, color: stStyle.color,
+                                    padding: '2px 8px', borderRadius: '999px',
+                                    backgroundColor: isFailed ? 'rgba(239,68,68,0.08)' : state === 'SUCCESS' ? 'rgba(22,163,74,0.08)' : 'rgba(59,130,246,0.08)',
                                   }}>
-                                    {errorMsg}
-                                  </div>
-                                ) : (
-                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>-</span>
-                                )}
-                              </td>
-                              <td style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', wordBreak: 'break-all', whiteSpace: 'normal', lineHeight: 1.5, maxWidth: '300px' }}>
-                                {extraMsg || '-'}
-                              </td>
-                            </tr>
+                                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: stStyle.color }} />
+                                    {state}
+                                  </span>
+                                </td>
+                                <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmtDate(createTime)}</td>
+                                <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmtDate(finishTime)}</td>
+                                <td style={{ fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{duration}</td>
+                                <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{progress}</td>
+                              </tr>
+                              {/* Expandable error detail row */}
+                              {isFailed && errorMsg && (
+                                <tr>
+                                  <td colSpan={6} style={{ padding: '0 12px 12px 48px', borderTop: 'none' }}>
+                                    <div style={{
+                                      display: 'flex', alignItems: 'flex-start', gap: '8px',
+                                      padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                                      backgroundColor: 'rgba(239,68,68,0.04)',
+                                      border: '1px solid rgba(239,68,68,0.12)',
+                                    }}>
+                                      <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--danger-500)' }} />
+                                      <div style={{
+                                        fontSize: '0.76rem', lineHeight: 1.6, color: 'var(--danger-600)',
+                                        wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+                                      }}>
+                                        {errorMsg}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           );
                         })}
                       </tbody>
