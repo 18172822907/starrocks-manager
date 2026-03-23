@@ -228,7 +228,6 @@ const fmtJson = (s: string): string => {
                             padding: '10px',
                             borderRadius: '8px',
                             backgroundColor: 'var(--bg-secondary)',
-                            border: '1px solid var(--border-secondary)',
                             display: 'flex', flexDirection: 'column', gap: '10px',
                           }}>
                             {/* Refresh Info */}
