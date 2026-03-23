@@ -56,8 +56,74 @@ function TaskRunsHistory({ taskRuns, taskRunsLoading, str }: {
     } catch { return d; }
   };
 
-  const fmtJson = (s: string): string => {
+const fmtJson = (s: string): string => {
     try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; }
+  };
+
+  // Resizable content box with drag handle
+  const ResizableBox = ({ children, defaultHeight, style }: {
+    children: React.ReactNode;
+    defaultHeight: number;
+    style?: React.CSSProperties;
+  }) => {
+    const boxRef = React.useRef<HTMLDivElement>(null);
+    const [height, setHeight] = React.useState(defaultHeight);
+
+    const onMouseDown = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startY = e.clientY;
+      const startH = height;
+      const onMove = (ev: MouseEvent) => {
+        const newH = Math.max(40, startH + ev.clientY - startY);
+        setHeight(newH);
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'ns-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    };
+
+    return (
+      <div>
+        <div
+          ref={boxRef}
+          style={{
+            overflowY: 'auto',
+            height: `${height}px`,
+            ...style,
+          }}
+        >
+          {children}
+        </div>
+        <div
+          onMouseDown={onMouseDown}
+          style={{
+            height: '14px', cursor: 'ns-resize', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(0,0,0,0.02)',
+            borderTop: '1px solid rgba(0,0,0,0.06)',
+            borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+            transition: 'background-color 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.06)'; }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.02)'; }}
+          title="拖动调整高度"
+        >
+          <svg width="20" height="4" viewBox="0 0 20 4" style={{ opacity: 0.3 }}>
+            <circle cx="4" cy="2" r="1.2" fill="currentColor" />
+            <circle cx="10" cy="2" r="1.2" fill="currentColor" />
+            <circle cx="16" cy="2" r="1.2" fill="currentColor" />
+          </svg>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -165,7 +231,6 @@ function TaskRunsHistory({ taskRuns, taskRunsLoading, str }: {
                                 borderRadius: 'var(--radius-md)',
                                 border: '1px solid var(--border-secondary)',
                                 backgroundColor: 'var(--bg-secondary)',
-                                overflow: 'hidden',
                               }}>
                                 <div style={{
                                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -188,14 +253,13 @@ function TaskRunsHistory({ taskRuns, taskRunsLoading, str }: {
                                     {copiedIdx?.idx === i && copiedIdx?.type === 'extra' ? <><Check size={10} /> 已复制</> : <><Copy size={10} /> 复制</>}
                                   </button>
                                 </div>
-                                <div style={{
-                                  padding: '8px 12px', maxHeight: '140px', overflowY: 'auto',
+                                <ResizableBox defaultHeight={100} style={{
+                                  padding: '8px 12px',
                                   fontSize: '0.72rem', lineHeight: 1.5, color: 'var(--text-secondary)',
                                   whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono, monospace)',
-                                  resize: 'vertical', minHeight: '40px',
                                 }}>
                                   {fmtJson(extraMsg)}
-                                </div>
+                                </ResizableBox>
                               </div>
                             )}
 
@@ -205,7 +269,6 @@ function TaskRunsHistory({ taskRuns, taskRunsLoading, str }: {
                                 borderRadius: 'var(--radius-md)',
                                 border: '1px solid rgba(239,68,68,0.15)',
                                 backgroundColor: 'rgba(239,68,68,0.03)',
-                                overflow: 'hidden',
                               }}>
                                 <div style={{
                                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -228,14 +291,13 @@ function TaskRunsHistory({ taskRuns, taskRunsLoading, str }: {
                                     {copiedIdx?.idx === i && copiedIdx?.type === 'error' ? <><Check size={10} /> 已复制</> : <><Copy size={10} /> 复制</>}
                                   </button>
                                 </div>
-                                <div style={{
-                                  padding: '8px 12px', maxHeight: '100px', overflowY: 'auto',
+                                <ResizableBox defaultHeight={80} style={{
+                                  padding: '8px 12px',
                                   fontSize: '0.73rem', lineHeight: 1.55, color: 'var(--danger-600)',
                                   whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono, monospace)',
-                                  resize: 'vertical', minHeight: '40px',
                                 }}>
                                   {errorMsg}
-                                </div>
+                                </ResizableBox>
                               </div>
                             )}
                           </div>
