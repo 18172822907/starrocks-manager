@@ -226,12 +226,10 @@ const fmtJson = (s: string): string => {
                           <div style={{
                             margin: '0 12px 12px 42px',
                             padding: '12px',
-                            borderRadius: 'var(--radius-lg, 10px)',
+                            borderRadius: '10px',
                             backgroundColor: 'var(--bg-secondary)',
                             border: '1px solid var(--border-secondary)',
-                            borderLeft: `3px solid ${isFailed ? 'var(--danger-400)' : 'var(--primary-400)'}`,
                             display: 'flex', flexDirection: 'column', gap: '10px',
-                            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
                           }}>
                             {/* Refresh Info Card */}
                             {extraMsg && (
