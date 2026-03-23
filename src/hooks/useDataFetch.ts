@@ -57,6 +57,9 @@ export function useDataFetch<T>(opts: UseDataFetchOptions<T>, initialData: T): U
 
   useEffect(() => {
     if (session && (optsRef.current.autoFetch !== false)) refresh();
+    // When session becomes null (cluster offline/unknown), stop loading
+    // so pages don't stay stuck on a spinner forever.
+    if (!session) setLoading(false);
   }, [session, refresh]);
 
   // Listen for cluster-switched event: immediately clear stale data
