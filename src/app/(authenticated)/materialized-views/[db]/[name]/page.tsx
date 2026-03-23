@@ -105,21 +105,20 @@ const fmtJson = (s: string): string => {
         <div
           onMouseDown={onMouseDown}
           style={{
-            height: '14px', cursor: 'ns-resize', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            backgroundColor: 'rgba(0,0,0,0.02)',
-            borderTop: '1px solid rgba(0,0,0,0.06)',
-            borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+            height: '18px', cursor: 'ns-resize', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', gap: '3px',
+            backgroundColor: 'rgba(0,0,0,0.025)',
+            borderTop: '1px solid rgba(0,0,0,0.05)',
+            borderRadius: '0 0 6px 6px',
             transition: 'background-color 0.15s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.06)'; }}
-          onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.02)'; }}
+          onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.07)'; }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.025)'; }}
           title="拖动调整高度"
         >
-          <svg width="20" height="4" viewBox="0 0 20 4" style={{ opacity: 0.3 }}>
-            <circle cx="4" cy="2" r="1.2" fill="currentColor" />
-            <circle cx="10" cy="2" r="1.2" fill="currentColor" />
-            <circle cx="16" cy="2" r="1.2" fill="currentColor" />
+          <svg width="30" height="6" viewBox="0 0 30 6" style={{ opacity: 0.35 }}>
+            <rect x="6" y="1" width="18" height="1.5" rx="0.75" fill="currentColor" />
+            <rect x="6" y="3.5" width="18" height="1.5" rx="0.75" fill="currentColor" />
           </svg>
         </div>
       </div>
@@ -223,39 +222,57 @@ const fmtJson = (s: string): string => {
                     {/* Expanded detail panel */}
                     {isExpanded && hasDetail && (
                       <tr>
-                        <td colSpan={8} style={{ padding: '0 16px 14px 42px', borderTop: 'none' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {/* Refresh Info Section */}
+                        <td colSpan={8} style={{ padding: '0', borderTop: 'none' }}>
+                          <div style={{
+                            margin: '0 12px 12px 42px',
+                            padding: '12px',
+                            borderRadius: 'var(--radius-lg, 10px)',
+                            backgroundColor: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-secondary)',
+                            borderLeft: `3px solid ${isFailed ? 'var(--danger-400)' : 'var(--primary-400)'}`,
+                            display: 'flex', flexDirection: 'column', gap: '10px',
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                          }}>
+                            {/* Refresh Info Card */}
                             {extraMsg && (
                               <div style={{
-                                borderRadius: 'var(--radius-md)',
+                                borderRadius: '8px',
                                 border: '1px solid var(--border-secondary)',
-                                backgroundColor: 'var(--bg-secondary)',
+                                backgroundColor: 'var(--bg-primary)',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
                               }}>
                                 <div style={{
                                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                  padding: '6px 12px', borderBottom: '1px solid var(--border-secondary)',
+                                  padding: '7px 12px',
+                                  borderBottom: '1px solid var(--border-secondary)',
+                                  borderRadius: '8px 8px 0 0',
                                   backgroundColor: 'var(--bg-tertiary)',
                                 }}>
-                                  <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                                    刷新信息
+                                  <span style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-secondary)',
+                                  }}>
+                                    <RefreshCw size={11} style={{ opacity: 0.6 }} /> 刷新信息
                                   </span>
                                   <button
                                     onClick={e => { e.stopPropagation(); handleCopy(extraMsg, i, 'extra'); }}
                                     style={{
                                       display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                      padding: '2px 8px', borderRadius: 'var(--radius-sm)',
-                                      fontSize: '0.7rem', cursor: 'pointer', border: 'none',
-                                      backgroundColor: 'var(--bg-quaternary, rgba(0,0,0,0.04))', color: 'var(--text-tertiary)',
-                                      transition: 'background-color 0.15s',
+                                      padding: '3px 10px', borderRadius: '6px',
+                                      fontSize: '0.7rem', cursor: 'pointer',
+                                      border: '1px solid var(--border-secondary)',
+                                      backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)',
+                                      transition: 'all 0.15s',
                                     }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary-300)'; e.currentTarget.style.color = 'var(--primary-500)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-secondary)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
                                   >
                                     {copiedIdx?.idx === i && copiedIdx?.type === 'extra' ? <><Check size={10} /> 已复制</> : <><Copy size={10} /> 复制</>}
                                   </button>
                                 </div>
                                 <ResizableBox defaultHeight={100} style={{
-                                  padding: '8px 12px',
-                                  fontSize: '0.72rem', lineHeight: 1.5, color: 'var(--text-secondary)',
+                                  padding: '10px 14px',
+                                  fontSize: '0.72rem', lineHeight: 1.6, color: 'var(--text-secondary)',
                                   whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono, monospace)',
                                 }}>
                                   {fmtJson(extraMsg)}
@@ -263,37 +280,46 @@ const fmtJson = (s: string): string => {
                               </div>
                             )}
 
-                            {/* Error Message Section */}
+                            {/* Error Message Card */}
                             {errorMsg && (
                               <div style={{
-                                borderRadius: 'var(--radius-md)',
-                                border: '1px solid rgba(239,68,68,0.15)',
-                                backgroundColor: 'rgba(239,68,68,0.03)',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(239,68,68,0.2)',
+                                backgroundColor: 'rgba(239,68,68,0.02)',
+                                boxShadow: '0 1px 2px rgba(239,68,68,0.05)',
                               }}>
                                 <div style={{
                                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                  padding: '6px 12px', borderBottom: '1px solid rgba(239,68,68,0.1)',
-                                  backgroundColor: 'rgba(239,68,68,0.06)',
+                                  padding: '7px 12px',
+                                  borderBottom: '1px solid rgba(239,68,68,0.12)',
+                                  borderRadius: '8px 8px 0 0',
+                                  backgroundColor: 'rgba(239,68,68,0.05)',
                                 }}>
-                                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 600, color: 'var(--danger-600)' }}>
+                                  <span style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    fontSize: '0.74rem', fontWeight: 600, color: 'var(--danger-600)',
+                                  }}>
                                     <AlertTriangle size={12} /> 错误信息
                                   </span>
                                   <button
                                     onClick={e => { e.stopPropagation(); handleCopy(errorMsg, i, 'error'); }}
                                     style={{
                                       display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                      padding: '2px 8px', borderRadius: 'var(--radius-sm)',
-                                      fontSize: '0.7rem', cursor: 'pointer', border: 'none',
-                                      backgroundColor: 'rgba(239,68,68,0.08)', color: 'var(--danger-500)',
-                                      transition: 'background-color 0.15s',
+                                      padding: '3px 10px', borderRadius: '6px',
+                                      fontSize: '0.7rem', cursor: 'pointer',
+                                      border: '1px solid rgba(239,68,68,0.2)',
+                                      backgroundColor: 'rgba(239,68,68,0.03)', color: 'var(--danger-500)',
+                                      transition: 'all 0.15s',
                                     }}
+                                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.08)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.03)'; }}
                                   >
                                     {copiedIdx?.idx === i && copiedIdx?.type === 'error' ? <><Check size={10} /> 已复制</> : <><Copy size={10} /> 复制</>}
                                   </button>
                                 </div>
                                 <ResizableBox defaultHeight={80} style={{
-                                  padding: '8px 12px',
-                                  fontSize: '0.73rem', lineHeight: 1.55, color: 'var(--danger-600)',
+                                  padding: '10px 14px',
+                                  fontSize: '0.73rem', lineHeight: 1.6, color: 'var(--danger-600)',
                                   whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono, monospace)',
                                 }}>
                                   {errorMsg}
