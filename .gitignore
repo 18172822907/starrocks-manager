@@ -42,3 +42,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# config (user-specific)
+config.yaml
+config.yml
+
+# logs
+/logs/
+
+# runtime
+app.pid
+local.db

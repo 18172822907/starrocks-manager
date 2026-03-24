@@ -6,11 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "init-db": "bash scripts/init-db.sh",
+    "prod:start": "bash scripts/start.sh",
+    "prod:stop": "bash scripts/stop.sh"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.6.2",
+    "js-yaml": "^4.1.1",
     "lucide-react": "^0.577.0",
     "mysql2": "^3.19.1",
     "next": "16.1.6",
@@ -21,6 +25,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

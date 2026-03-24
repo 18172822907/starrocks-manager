@@ -1,5 +1,6 @@
 import { getLocalDb } from '@/lib/local-db';
 import { clearConnectionFailure, getPool } from '@/lib/db';
+import { config } from '@/lib/config';
 import mysql from 'mysql2/promise';
 
 export interface ClusterHealthStatus {
@@ -16,7 +17,7 @@ const globalForHealth = globalThis as unknown as {
   __lastCheckTime?: number;
 };
 
-const HEALTH_INTERVAL_MS = 300_000; // 5 minutes
+const HEALTH_INTERVAL_MS = config.health_check.interval * 1000;
 
 // Shared cache: cluster id → health status
 let _healthCache: Record<number, ClusterHealthStatus> = globalForHealth.__healthCache || {};

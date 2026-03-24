@@ -1,9 +1,12 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import { config } from './config';
 
-const DB_DIR = path.join(process.cwd(), 'data');
-const DB_PATH = path.join(DB_DIR, 'starrocks-tools.db');
+const DB_PATH = path.isAbsolute(config.database.sqlite.path)
+  ? config.database.sqlite.path
+  : path.join(process.cwd(), config.database.sqlite.path);
+const DB_DIR = path.dirname(DB_PATH);
 
 let db: Database.Database | null = null;
 
@@ -218,7 +221,7 @@ export function getLocalDb(): Database.Database {
   const adminExists = db.prepare('SELECT id FROM sys_users WHERE username = ?').get('admin');
   if (!adminExists) {
     const bcrypt = require('bcryptjs');
-    const hash = bcrypt.hashSync('admin123', 10);
+    const hash = bcrypt.hashSync(config.admin.password, 10);
     db.prepare('INSERT INTO sys_users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)').run('admin', hash, '管理员', 'admin');
   }
 

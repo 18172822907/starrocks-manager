@@ -1,0 +1,40 @@
+# StarRocks Manager 配置文件
+# 复制此文件为 config.yaml 并根据环境修改
+
+server:
+  port: 3000
+  # 运行模式: development | production
+  node_env: production
+
+# 本地元数据库配置
+database:
+  # 类型: sqlite | mysql
+  type: sqlite
+
+  # SQLite 配置 (type=sqlite 时生效)
+  sqlite:
+    path: ./data/starrocks-tools.db
+
+  # MySQL 配置 (type=mysql 时生效)
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    user: root
+    password: ""
+    database: starrocks_tools
+
+# 初始管理员账号 (首次启动自动创建)
+admin:
+  password: Admin@2024
+
+# 健康检测
+health_check:
+  # 检测间隔 (秒)
+  interval: 300
+
+# 日志
+log:
+  # 级别: debug | info | warn | error
+  level: info
+  # 日志文件目录 (为空则仅输出到控制台)
+  dir: ./logs
