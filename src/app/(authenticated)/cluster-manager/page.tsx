@@ -106,9 +106,7 @@ export default function ClusterManagerPage() {
   }, [clusters, checkHealth]);
 
   useEffect(() => {
-    fetchClusters().then(list => {
-      if (list && list.length > 0) checkAllHealth(list);
-    });
+    fetchClusters();
     return () => { healthAbortRef.current?.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -197,7 +195,6 @@ export default function ClusterManagerPage() {
         setSuccess(editCluster ? '集群已更新' : '集群已创建');
         setTimeout(() => setSuccess(''), 3000);
         const list = await fetchClusters();
-        if (list) checkAllHealth(list);
         refreshAuth();
       }
     } catch (err) { setFormError(String(err)); }
@@ -237,8 +234,7 @@ export default function ClusterManagerPage() {
 
   async function handleRefresh() {
     setLoading(true);
-    const list = await fetchClusters();
-    if (list) await checkAllHealth(list);
+    await fetchClusters();
   }
 
   const [search, setSearch] = useState('');
