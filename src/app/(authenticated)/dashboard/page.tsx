@@ -168,6 +168,10 @@ export default function DashboardPage() {
     }
   }, [clusterSessionId, fetchCluster, fetchQueries]);
 
+  // Keep a ref to fetchAll so cluster-switched handler always uses the latest version
+  const fetchAllRef = useRef(fetchAll);
+  fetchAllRef.current = fetchAll;
+
   // Clear stale data when cluster switches
   useEffect(() => {
     const handleSwitch = () => {
@@ -182,13 +186,13 @@ export default function DashboardPage() {
       setLoading(true);
       connectionFailedRef.current = false;
       setConnectionFailed(false);
-      // Trigger re-fetch after a microtask to allow React to process
-      // the new activeCluster from useAuth before we read clusterSessionId
-      setTimeout(() => fetchAll(), 100);
+      // Deferred re-fetch: allow React to process state updates (new activeCluster/session)
+      // before calling fetchAll. Use ref to always get the latest version with correct session.
+      setTimeout(() => fetchAllRef.current(), 150);
     };
     window.addEventListener('cluster-switched', handleSwitch);
     return () => window.removeEventListener('cluster-switched', handleSwitch);
-  }, [fetchAll]);
+  }, []);
 
   // Initial load — fetch in background (if cached, loading is already false)
   useEffect(() => {
@@ -199,7 +203,7 @@ export default function DashboardPage() {
   // Cluster auto-refresh interval (30s) — stops on connectionFailed
   useEffect(() => {
     if (connectionFailed) return;
-    const interval = setInterval(fetchCluster, 30000);
+    const interval = setInterval(fetchCluster, 300_000); // 5 minutes
     return () => clearInterval(interval);
   }, [fetchCluster, connectionFailed]);
 

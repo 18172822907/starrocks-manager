@@ -97,6 +97,11 @@ export async function createPool(config: StarRocksConnectionConfig): Promise<Poo
   failedConnections.delete(sessionId);
   failedConnections.delete(`${config.host}:${config.port}`);
   pools.set(sessionId, pool);
+  // Also alias under host:port so API calls (which use host:port) can find it directly
+  const hostPortKey = `${config.host}:${config.port}`;
+  if (hostPortKey !== sessionId) {
+    pools.set(hostPortKey, pool);
+  }
   return pool;
 }
 

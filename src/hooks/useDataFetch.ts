@@ -62,7 +62,11 @@ export function useDataFetch<T>(opts: UseDataFetchOptions<T>, initialData: T): U
     if (!session) setLoading(false);
   }, [session, refresh]);
 
-  // Listen for cluster-switched event: immediately clear stale data
+  // Keep a ref to the latest refresh so the cluster-switched handler can call it
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+
+  // Listen for cluster-switched event: immediately clear stale data, then re-fetch
   useEffect(() => {
     const handleSwitch = () => {
       setData(initialDataRef.current);
@@ -70,6 +74,11 @@ export function useDataFetch<T>(opts: UseDataFetchOptions<T>, initialData: T): U
       setCachedAt('');
       setFromCache(false);
       setLoading(true);
+      // Deferred re-fetch: allow React to process state updates (new session)
+      // before calling refresh. Use ref to get the latest refresh with valid session.
+      setTimeout(() => {
+        refreshRef.current();
+      }, 150);
     };
     window.addEventListener('cluster-switched', handleSwitch);
     return () => window.removeEventListener('cluster-switched', handleSwitch);

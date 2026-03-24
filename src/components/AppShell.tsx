@@ -45,7 +45,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const statusLabel = !activeCluster
     ? '未选择'
-    : clusterStatus === 'online' ? '在线' : clusterStatus === 'offline' ? '离线' : '检测中';
+    : clusterStatus === 'online' ? '在线' : clusterStatus === 'offline' ? '离线' : clusterStatus === 'switching' ? '切换中' : '检测中';
 
   const handleRetry = useCallback(async () => {
     if (!activeCluster) return;
@@ -297,6 +297,30 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 ? '请前往「系统管理 → 集群管理」添加并激活集群'
                 : '请联系管理员为您分配可用集群'}
             </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Cluster switching: show smooth loading transition instead of page content.
+  if (clusterStatus === 'switching' && !isExempt) {
+    return (
+      <div className="app-layout">
+        <Sidebar />
+        <main className="main-content">
+          {headerBar}
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            flex: 1, gap: '16px', color: 'var(--text-tertiary)',
+          }}>
+            <div className="spinner" style={{ width: '32px', height: '32px' }} />
+            <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)' }}>正在切换集群...</div>
+            {activeCluster && (
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)' }}>
+                {activeCluster.name} · {activeCluster.host}:{activeCluster.port}
+              </div>
+            )}
           </div>
         </main>
       </div>

@@ -34,15 +34,18 @@ export async function POST(
     // Clear any failure cooldown for this cluster so health checks can proceed
     clearConnectionFailure(`${cluster.host}:${cluster.port}`);
 
-    // Fire-and-forget: create pool in background (do NOT await)
-    // This avoids the 5s timeout lag when the cluster is unreachable
-    createPool({
-      host: cluster.host,
-      port: cluster.port,
-      user: cluster.username,
-      password: cluster.password,
-      database: cluster.default_db || undefined,
-    }).catch(() => { /* pool creation failed — health probe will handle status */ });
+    // Create pool for new cluster — await to avoid race condition with health check
+    // If the cluster is unreachable, pool creation will fail, but the response
+    // still succeeds (frontend determines online/offline via health check)
+    try {
+      await createPool({
+        host: cluster.host,
+        port: cluster.port,
+        user: cluster.username,
+        password: cluster.password,
+        database: cluster.default_db || undefined,
+      });
+    } catch { /* pool creation failed — health probe will handle status */ }
 
     // Return immediately — frontend will determine online/offline via health check
     return NextResponse.json({

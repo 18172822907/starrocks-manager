@@ -27,7 +27,7 @@ export function useSession() {
 
   // When cluster is confirmed offline, return null session to gate all API calls.
   // 'unknown' is a transitional state during cluster switching — don't block on it.
-  const clusterUnavailable = clusterStatus === 'offline';
+  const clusterUnavailable = clusterStatus === 'offline' || clusterStatus === 'switching';
 
   const session: SessionInfo | null = useMemo(() => {
     if (!user || !activeCluster) return null;
