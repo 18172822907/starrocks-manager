@@ -104,6 +104,15 @@ export function getPool(sessionId: string): Pool | undefined {
   return pools.get(sessionId);
 }
 
+/** Remove ALL pool map entries that point to the same Pool object */
+function cleanupPoolByValue(pool: Pool): void {
+  for (const [key, val] of pools.entries()) {
+    if (val === pool) {
+      pools.delete(key);
+    }
+  }
+}
+
 export async function closePool(sessionId: string): Promise<void> {
   const pool = pools.get(sessionId);
   if (pool) {
@@ -192,6 +201,7 @@ export async function executeQuery<T extends RowDataPacket[] = RowDataPacket[]>(
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       const isConnectionError = msg.includes('closed state') ||
+        msg.includes('Pool is closed') ||
         msg.includes('ECONNRESET') ||
         msg.includes('PROTOCOL_CONNECTION_LOST') ||
         msg.includes('ECONNREFUSED') ||
@@ -200,14 +210,19 @@ export async function executeQuery<T extends RowDataPacket[] = RowDataPacket[]>(
 
       if (isConnectionError && attempt === 0) {
         console.warn(`[Pool ${sessionId}] Connection error: ${msg}`);
-        // Remove dead pool — but do NOT recreatePool here (avoids 10s timeout!)
-        pools.delete(sessionId);
+        // Remove dead pool AND all aliases pointing to same pool object
+        cleanupPoolByValue(pool);
         try { await pool.end(); } catch { /* ignore */ }
         // Mark as failed to prevent rapid retries from other requests
         markConnectionFailed(sessionId);
+        // Also mark the host:port pattern (dashboard uses host:port, other pages use user@host:port)
+        const atIdx = sessionId.indexOf('@');
+        if (atIdx >= 0) markConnectionFailed(sessionId.slice(atIdx + 1));
       } else if (isConnectionError) {
         // Second attempt also failed — ensure we mark as failed
         markConnectionFailed(sessionId);
+        const atIdx = sessionId.indexOf('@');
+        if (atIdx >= 0) markConnectionFailed(sessionId.slice(atIdx + 1));
       }
       // Log error if source is provided (skip health checks to reduce noise)
       if (source && source !== 'health') {

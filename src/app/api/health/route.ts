@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { clearConnectionFailure, getPool } from '@/lib/db';
+import { clearConnectionFailure, getPool, createPool } from '@/lib/db';
 import mysql from 'mysql2/promise';
 
 /**
@@ -35,15 +35,17 @@ export async function GET(request: NextRequest) {
   // Strategy 2: Direct connection (for unconnected clusters or failed pools)
   let username = 'root';
   let password = '';
+  let defaultDb: string | undefined;
   try {
     const { getLocalDb } = require('@/lib/local-db');
     const db = getLocalDb();
     const cluster = db.prepare(
-      'SELECT username, password FROM clusters WHERE host = ? AND port = ? AND is_active = 1'
-    ).get(host, parseInt(portStr, 10)) as { username: string; password: string } | undefined;
+      'SELECT username, password, default_db FROM clusters WHERE host = ? AND port = ? AND is_active = 1'
+    ).get(host, parseInt(portStr, 10)) as { username: string; password: string; default_db?: string } | undefined;
     if (cluster) {
       username = cluster.username;
       password = cluster.password;
+      defaultDb = cluster.default_db || undefined;
     }
   } catch { /* use defaults */ }
 
@@ -58,6 +60,20 @@ export async function GET(request: NextRequest) {
     });
     await connection.query('SELECT 1');
     clearConnectionFailure(sessionId);
+
+    // Ensure a pool exists for this cluster so subsequent API calls work.
+    // This is critical during cluster switching — the fire-and-forget createPool
+    // in the activate API may not have completed yet.
+    if (!getPool(sessionId)) {
+      createPool({
+        host,
+        port: parseInt(portStr, 10),
+        user: username,
+        password,
+        database: defaultDb,
+      }).catch(() => { /* pool creation failed, will retry on next health check */ });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(

@@ -25,12 +25,13 @@ export function useSession() {
   const { user, activeCluster, loading, logout, clusterStatus, setClusterStatus } = useAuth();
   const [retrying, setRetrying] = useState(false);
 
-  // When cluster is offline or in transition (unknown), return null session to gate all API calls.
-  const clusterUnavailable = clusterStatus === 'offline' || clusterStatus === 'unknown';
+  // When cluster is confirmed offline, return null session to gate all API calls.
+  // 'unknown' is a transitional state during cluster switching — don't block on it.
+  const clusterUnavailable = clusterStatus === 'offline';
 
   const session: SessionInfo | null = useMemo(() => {
     if (!user || !activeCluster) return null;
-    // Gate: if cluster is unavailable, suppress session so pages skip API calls
+    // Gate: if cluster is confirmed offline, suppress session so pages skip API calls
     if (clusterUnavailable) return null;
     return {
       sessionId: `${activeCluster.host}:${activeCluster.port}`,

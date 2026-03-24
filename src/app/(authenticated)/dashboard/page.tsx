@@ -182,10 +182,13 @@ export default function DashboardPage() {
       setLoading(true);
       connectionFailedRef.current = false;
       setConnectionFailed(false);
+      // Trigger re-fetch after a microtask to allow React to process
+      // the new activeCluster from useAuth before we read clusterSessionId
+      setTimeout(() => fetchAll(), 100);
     };
     window.addEventListener('cluster-switched', handleSwitch);
     return () => window.removeEventListener('cluster-switched', handleSwitch);
-  }, []);
+  }, [fetchAll]);
 
   // Initial load — fetch in background (if cached, loading is already false)
   useEffect(() => {

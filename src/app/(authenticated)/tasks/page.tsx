@@ -5,8 +5,9 @@ import { useSession } from '@/hooks/useSession';
 import { useDataFetch } from '@/hooks/useDataFetch';
 import { usePagination } from '@/hooks/usePagination';
 import { str } from '@/lib/utils';
-import { PageHeader, StatusBadge, DatabaseBadge, SearchToolbar, DataTable, ErrorBanner, SuccessToast, CacheTimeBadge } from '@/components/ui';
-import { ListChecks } from 'lucide-react';
+import { PageHeader, StatusBadge, DatabaseBadge, DataTable, ErrorBanner, SuccessToast, CacheTimeBadge, CommandLogButton } from '@/components/ui';
+import SearchableSelect from '@/components/SearchableSelect';
+import { ListChecks, RefreshCw } from 'lucide-react';
 
 export default function TaskRunsPage() {
   const [search, setSearch] = useState('');
@@ -36,13 +37,34 @@ export default function TaskRunsPage() {
   return (
     <>
       <PageHeader title="Task Runs" breadcrumb={[{ label: '任务管理' }, { label: 'Task Runs' }]} description={<>查看任务运行记录 · {runs.length} 条记录<CacheTimeBadge cachedAt={cachedAt} fromCache={fromCache} /></>}
-        onRefresh={() => refresh(true)} refreshing={refreshing} loading={loading} logSource="tasks" />
+      />
       <div className="page-body">
         <ErrorBanner error={error} />
         <SuccessToast message={success} />
-        <SearchToolbar search={search} onSearch={setSearch} placeholder="搜索任务名..."
-          filters={{ value: stateFilter, onChange: setStateFilter, options: allStates.map(s => ({ value: s, label: s })) }}
-        />
+        <div className="table-toolbar">
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', flex: 1 }}>
+            <div className="search-bar" style={{ flex: 1, minWidth: '200px', marginBottom: 0 }}>
+              <input className="input" placeholder="搜索任务名..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            {allStates.length > 0 && (
+              <div style={{ width: '160px' }}>
+                <SearchableSelect
+                  value={stateFilter}
+                  onChange={setStateFilter}
+                  placeholder="全部状态"
+                  options={[{ label: '全部状态', value: 'all' }, ...allStates.map(s => ({ label: s, value: s }))]}
+                />
+              </div>
+            )}
+          </div>
+          <div className="toolbar-actions">
+            <CommandLogButton source="tasks" title="Task Runs" />
+            <button className="btn btn-secondary" onClick={() => refresh(true)} disabled={loading || refreshing}>
+              <RefreshCw size={16} style={{ animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' }} />
+              {refreshing ? '刷新中...' : '刷新'}
+            </button>
+          </div>
+        </div>
         <DataTable loading={loading} empty={filtered.length === 0} emptyIcon={<ListChecks size={48} />}
           emptyText={search || stateFilter !== 'all' ? '没有匹配的记录' : '暂无运行记录'}
           footerLeft={<>共 <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> 条记录</>}
