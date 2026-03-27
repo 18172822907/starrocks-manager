@@ -57,3 +57,6 @@ local.db
 # offline packaging output
 /dist/
 *.tar.gz
+
+# deploy script (contains registry & env-specific config)
+scripts/deploy.sh
