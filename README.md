@@ -51,14 +51,14 @@
 - **Node.js** ≥ 20
 - **npm** ≥ 10
 - **SQLite3** (默认模式，系统通常自带)
-- **MySQL** (可选，用于元数据持久化)
+- **MySQL** (生产部署推荐，用于元数据持久化)
 
 ### 开发环境
 
 ```bash
 # 克隆项目
 git clone <repository-url>
-cd starrocks-tools
+cd starrocks-manager
 
 # 安装依赖
 npm install
@@ -70,67 +70,227 @@ cp config.example.yaml config.yaml
 npm run dev
 ```
 
-访问 http://localhost:3000，默认管理员账号：`admin` / `Admin@2024`
+访问 http://localhost:3000/starrocks-manager ，默认管理员账号：`admin` / `Admin@2024`
 
-### 生产环境部署
+### 生产环境部署（Docker / K8s）
 
-#### 1. 构建
+> 生产环境使用 MySQL 作为元数据库，应用访问前缀为 `/starrocks-manager`，配合 K8s Ingress 路径路由使用。
 
-```bash
-npm install
-npm run build
-```
+#### 前置条件
 
-#### 2. 打包传输
+1. Docker Desktop 已安装并运行
+2. 已准备好 MySQL 数据库实例
+3. 已手动执行数据库初始化脚本：
+   ```bash
+   mysql -h <HOST> -P <PORT> -u <USER> -p <DATABASE> < db/migrations/001_init_mysql.sql
+   ```
 
-```bash
-# 打包必要文件
-tar -czf starrocks-tools.tar.gz \
-  .next/standalone .next/static public \
-  db scripts config.example.yaml package.json
-
-# 传输到服务器
-scp starrocks-tools.tar.gz user@server:/opt/
-```
-
-#### 3. 服务器部署
+#### 1. 配置环境变量
 
 ```bash
-# 解压
-cd /opt && tar -xzf starrocks-tools.tar.gz -C starrocks-tools
-cd starrocks-tools
-
-# 复制静态资源到 standalone 目录
-cp -r .next/static .next/standalone/.next/static
-cp -r public .next/standalone/public 2>/dev/null || true
-
-# 安装 native 依赖 (如果构建机与生产机架构不同)
-cd .next/standalone && npm install better-sqlite3 && cd ../..
-
-# 创建并修改配置
-cp config.example.yaml config.yaml
-vi config.yaml
+# 从模板创建 .env 文件
+cp .env.example .env
 ```
 
-#### 4. 初始化数据库
+编辑 `.env` 填入实际的 MySQL 连接信息：
+
+```env
+DB_TYPE=mysql
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=starrocks_manager
+ADMIN_PASSWORD=Admin@2024
+```
+
+#### 2. 一键构建 & 推送
 
 ```bash
-# SQLite 模式 (默认，自动创建)
-npm run init-db
-
-# MySQL 模式 (需先在 config.yaml 中配置 MySQL 连接)
-npm run init-db
+./scripts/deploy.sh
 ```
 
-#### 5. 启停服务
+`deploy.sh` 会自动完成以下步骤：
+1. 读取 `.env` 环境变量
+2. 生成 `config.yaml`（MySQL 模式）并打入镜像
+3. 使用 `docker build --platform linux/amd64` 构建镜像
+4. 推送到镜像仓库
+5. 清理临时生成的 `config.yaml`
+
+镜像地址: `***REGISTRY_REDACTED***/starrocks-manager:<YYYYMMDD>`
+
+#### 3. 本地测试
 
 ```bash
-# 启动
-npm run prod:start
-
-# 停止
-npm run prod:stop
+docker run -d --name starrocks-manager \
+  -p 3000:3000 \
+  ***REGISTRY_REDACTED***/starrocks-manager:latest
 ```
+
+访问 http://localhost:3000/starrocks-manager
+
+> **提示**: 生产镜像中 `config.yaml` 已内置 MySQL 连接信息，无需额外挂载。如需覆盖配置，可通过 `-v` 挂载自定义 `config.yaml`。
+
+#### 4. K8s 部署
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starrocks-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: starrocks-manager
+  template:
+    metadata:
+      labels:
+        app: starrocks-manager
+    spec:
+      containers:
+      - name: starrocks-manager
+        image: ***REGISTRY_REDACTED***/starrocks-manager:latest
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        livenessProbe:
+          httpGet:
+            path: /starrocks-manager/api/health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: starrocks-manager
+spec:
+  selector:
+    app: starrocks-manager
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: starrocks-manager
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /starrocks-manager
+        pathType: Prefix
+        backend:
+          service:
+            name: starrocks-manager
+            port:
+              number: 80
+EOF
+```
+
+> **提示**: 如需覆盖镜像内置的 `config.yaml`，创建 ConfigMap 并挂载到 `/app/config.yaml`。
+
+#### 5. 更新版本
+
+```bash
+# 构建并推送新版
+./scripts/deploy.sh
+
+# 更新 K8s 部署
+kubectl set image deployment/starrocks-manager \
+  starrocks-manager=***REGISTRY_REDACTED***/starrocks-manager:$(date +%Y%m%d)
+```
+
+---
+
+### 离线部署（内网服务器）
+
+> 适用于无法访问互联网的内网 Linux 服务器。在有网络的 Mac 开发机上打包，传输到服务器后一键安装。
+
+#### 前置条件
+
+- **开发机**: Docker Desktop 已安装、`.env` 已配置
+- **服务器**: Linux x86_64 (CentOS/Ubuntu 等)、MySQL 实例已就绪
+
+#### 1. 打包离线安装包（Mac 上执行）
+
+```bash
+# 配置 .env（如尚未配置）
+cp .env.example .env && vi .env
+
+# 一键打包（Docker 构建 + Node.js 下载 + 打 tar.gz）
+./scripts/pack-offline.sh
+```
+
+输出: `/tmp/starrocks-manager-offline-YYYYMMDD.tar.gz`
+
+#### 2. 传输到服务器
+
+```bash
+scp /tmp/starrocks-manager-offline-YYYYMMDD.tar.gz user@server:/tmp/
+```
+
+#### 3. 安装（服务器上执行）
+
+```bash
+cd /tmp
+tar -xzf starrocks-manager-offline-YYYYMMDD.tar.gz
+cd starrocks-manager-offline-YYYYMMDD
+sudo bash install.sh
+```
+
+安装脚本会自动完成:
+- 安装 Node.js 到 `/opt/starrocks-manager/node`
+- 部署应用到 `/opt/starrocks-manager/app`
+- 创建专用系统用户 `starrocks-manager`
+- 生成 `start.sh` / `stop.sh` / `restart.sh` 管理脚本
+- 启动服务
+
+#### 4. 初始化数据库（首次部署）
+
+```bash
+mysql -h <HOST> -P <PORT> -u <USER> -p <DB> < /opt/starrocks-manager/db/migrations/001_init_mysql.sql
+```
+
+#### 5. 管理服务
+
+```bash
+/opt/starrocks-manager/start.sh      # 启动
+/opt/starrocks-manager/stop.sh       # 停止
+/opt/starrocks-manager/restart.sh    # 重启
+
+# 查看日志
+tail -f /opt/starrocks-manager/app/logs/stdout.log
+```
+
+#### 6. 版本更新
+
+```bash
+# Mac 上重新打包
+./scripts/pack-offline.sh
+
+# 传输并重新安装（install.sh 会自动停止旧版本）
+scp /tmp/starrocks-manager-offline-YYYYMMDD.tar.gz user@server:/tmp/
+ssh user@server 'cd /tmp && tar -xzf starrocks-manager-offline-*.tar.gz && cd starrocks-manager-offline-* && sudo bash install.sh'
+```
+
+---
 
 ### 配置说明
 
@@ -139,40 +299,48 @@ npm run prod:stop
 ```yaml
 server:
   port: 3000                     # 服务端口
+  node_env: production           # development | production
 
 database:
   type: sqlite                   # sqlite | mysql
-  sqlite:
-    path: ./data/starrocks-tools.db
+  sqlite:                        # type=sqlite 时生效
+    path: ./data/starrocks-manager.db
   mysql:                         # type=mysql 时生效
     host: 127.0.0.1
     port: 3306
     user: root
     password: ""
-    database: starrocks_tools
+    database: starrocks_manager
 
 admin:
-  password: Admin@2024           # 初始管理员密码
+  password: Admin@2024           # 初始管理员密码（首次启动自动创建）
 
 health_check:
   interval: 300                  # 集群健康检测间隔（秒）
 
 log:
   level: info                    # debug | info | warn | error
-  dir: ./logs                    # 日志文件目录
+  dir: ./logs                    # 日志文件目录（为空则仅输出到控制台）
 ```
+
+> **Docker / 离线部署说明**: `deploy.sh` 和 `pack-offline.sh` 都会从 `.env` 自动生成 `config.yaml`，无需手动维护生产环境的配置文件。
 
 ## 项目结构
 
 ```
-├── config.example.yaml      # 配置模板
+├── .env.example              # Docker/离线部署环境变量模板
+├── config.example.yaml       # 配置模板
+├── Dockerfile                # Docker 多阶段构建
 ├── db/migrations/            # 数据库建表 SQL
 │   ├── 001_init_sqlite.sql
 │   └── 001_init_mysql.sql
 ├── scripts/                  # 部署脚本
-│   ├── start.sh
-│   ├── stop.sh
-│   └── init-db.sh
+│   ├── deploy.sh             # Docker 构建 & 推送
+│   ├── pack-offline.sh       # 离线部署打包（Mac 上执行）
+│   ├── offline-install.sh    # 离线安装（服务器上执行）
+│   ├── start.sh              # 开发环境启动
+│   ├── stop.sh               # 开发环境停止
+│   └── init-db.sh            # 数据库初始化
 ├── src/
 │   ├── app/
 │   │   ├── api/              # API 路由
@@ -180,11 +348,11 @@ log:
 │   ├── components/           # React 组件
 │   ├── hooks/                # 自定义 Hooks
 │   └── lib/                  # 核心库
-│       ├── config.ts         # 配置管理
+│       ├── config.ts         # YAML 配置管理
 │       ├── db.ts             # StarRocks 连接池
-│       ├── db-adapter.ts     # 数据库抽象层
-│       ├── local-db.ts       # 本地元数据库
-│       ├── health-monitor.ts # 健康监测单例
+│       ├── db-adapter.ts     # 数据库抽象层 (SQLite/MySQL)
+│       ├── local-db.ts       # 本地元数据库 (SQLite 模式)
+│       ├── health-monitor.ts # 集群健康监测单例
 │       ├── logger.ts         # 日志模块
 │       └── auth.ts           # 认证模块
 └── package.json
@@ -193,3 +361,4 @@ log:
 ## License
 
 Private
+

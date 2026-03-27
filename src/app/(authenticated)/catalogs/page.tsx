@@ -13,6 +13,7 @@ import {
   Eye, Trash2, Copy, Check, AlertTriangle,
   ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 type SortDir = 'asc' | 'desc';
 
@@ -65,7 +66,7 @@ export default function CatalogsPage() {
     setError('');
     try {
       const url = `/api/catalogs?sessionId=${encodeURIComponent(session.sessionId)}${forceRefresh ? '&refresh=true' : ''}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       if (data.error) setError(data.error);
       else {
@@ -108,7 +109,7 @@ export default function CatalogsPage() {
     setActionError('');
     setCopied(false);
     try {
-      const res = await fetch(`/api/catalogs/${encodeURIComponent(name)}?sessionId=${encodeURIComponent(session.sessionId)}`);
+      const res = await apiFetch(`/api/catalogs/${encodeURIComponent(name)}?sessionId=${encodeURIComponent(session.sessionId)}`);
       const data = await res.json();
       if (data.error) {
         setViewModal(v => ({ ...v, loading: false }));
@@ -134,7 +135,7 @@ export default function CatalogsPage() {
     setCreating(true);
     setActionError('');
     try {
-      const res = await fetch('/api/catalogs', {
+      const res = await apiFetch('/api/catalogs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, sql: createSql.trim() }),
@@ -156,7 +157,7 @@ export default function CatalogsPage() {
     setDeleting(true);
     setActionError('');
     try {
-      const res = await fetch('/api/catalogs', {
+      const res = await apiFetch('/api/catalogs', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, catalogName: deleteModal.name }),

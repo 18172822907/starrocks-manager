@@ -43,7 +43,7 @@ export function VersionBadge({ version }: { version: string }) {
     <span style={{
       padding: '2px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600,
       backgroundColor: 'rgba(139,92,246,0.08)', color: 'var(--accent-600)',
-      border: '1px solid rgba(139,92,246,0.2)',
+      border: '1px solid rgba(139,92,246,0.2)', whiteSpace: 'nowrap',
     }}>
       {version}
     </span>

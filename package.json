@@ -1,5 +1,5 @@
 {
-  "name": "starrocks-tools",
+  "name": "starrocks-manager",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.6.2",
     "js-yaml": "^4.1.1",
     "lucide-react": "^0.577.0",
     "mysql2": "^3.19.1",
@@ -32,5 +31,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.6.2"
   }
 }

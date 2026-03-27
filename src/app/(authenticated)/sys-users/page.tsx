@@ -6,6 +6,7 @@ import { PageHeader, ErrorBanner, SuccessToast, DataTable } from '@/components/u
 import { UserCog, Plus, Trash2, Pencil, X, Check, AlertCircle, ShieldCheck, Eye, Edit3, RefreshCw, Search, Lock } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface SysUser {
   id: number;
@@ -50,8 +51,8 @@ export default function SysUsersPage() {
   const fetchUsers = useCallback(async () => {
     try {
       const [usersRes, clustersRes] = await Promise.all([
-        fetch('/api/sys-users'),
-        fetch('/api/clusters'),
+        apiFetch('/api/sys-users'),
+        apiFetch('/api/clusters'),
       ]);
       const usersData = await usersRes.json();
       const clustersData = await clustersRes.json();
@@ -93,7 +94,7 @@ export default function SysUsersPage() {
         ? { id: editUser.id, ...form, password: form.password || undefined }
         : form;
 
-      const res = await fetch('/api/sys-users', {
+      const res = await apiFetch('/api/sys-users', {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -113,7 +114,7 @@ export default function SysUsersPage() {
 
   async function handleDelete(id: number) {
     try {
-      const res = await fetch('/api/sys-users', {
+      const res = await apiFetch('/api/sys-users', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
@@ -131,7 +132,7 @@ export default function SysUsersPage() {
 
   async function handleToggleActive(u: SysUser) {
     try {
-      const res = await fetch('/api/sys-users', {
+      const res = await apiFetch('/api/sys-users', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: u.id, is_active: u.is_active ? 0 : 1 }),

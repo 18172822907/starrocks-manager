@@ -13,7 +13,7 @@ database:
 
   # SQLite 配置 (type=sqlite 时生效)
   sqlite:
-    path: ./data/starrocks-tools.db
+    path: ./data/starrocks-manager.db
 
   # MySQL 配置 (type=mysql 时生效)
   mysql:
@@ -21,7 +21,7 @@ database:
     port: 3306
     user: root
     password: ""
-    database: starrocks_tools
+    database: starrocks_manager
 
 # 初始管理员账号 (首次启动自动创建)
 admin:

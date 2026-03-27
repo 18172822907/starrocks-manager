@@ -53,3 +53,7 @@ config.yml
 # runtime
 app.pid
 local.db
+
+# offline packaging output
+/dist/
+*.tar.gz

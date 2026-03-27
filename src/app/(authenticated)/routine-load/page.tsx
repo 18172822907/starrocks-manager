@@ -8,6 +8,7 @@ import { str } from '@/lib/utils';
 import { PageHeader, StatusBadge, DatabaseBadge, SearchToolbar, DataTable, ErrorBanner, SuccessToast, CacheTimeBadge } from '@/components/ui';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Pause, Play, Square, Database, Radio, AlertTriangle } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 const RL_ICONS: Record<string, string> = { RUNNING: '▶', PAUSED: '⏸', STOPPED: '⏹', CANCELLED: '✗', NEED_SCHEDULE: '⏳', UNSTABLE: '⚠' };
 
@@ -39,7 +40,7 @@ export default function RoutineLoadPage() {
     if (!session) return;
     const labels: Record<string, string> = { pause: '暂停', resume: '恢复', stop: '停止' };
     try {
-      const res = await fetch('/api/routine-load', {
+      const res = await apiFetch('/api/routine-load', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, action, dbName: db, jobName: name }),
       });

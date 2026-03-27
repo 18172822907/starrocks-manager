@@ -1,23 +1,26 @@
-import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { config } from './config';
 
-const DB_PATH = path.isAbsolute(config.database.sqlite.path)
-  ? config.database.sqlite.path
-  : path.join(process.cwd(), config.database.sqlite.path);
-const DB_DIR = path.dirname(DB_PATH);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let db: any = null;
 
-let db: Database.Database | null = null;
-
-export function getLocalDb(): Database.Database {
+export function getLocalDb() {
   if (db) return db;
+
+  const DB_PATH = path.isAbsolute(config.database.sqlite.path)
+    ? config.database.sqlite.path
+    : path.join(process.cwd(), config.database.sqlite.path);
+  const DB_DIR = path.dirname(DB_PATH);
 
   // Ensure data directory exists
   if (!fs.existsSync(DB_DIR)) {
     fs.mkdirSync(DB_DIR, { recursive: true });
   }
 
+  // eval('require') completely hides the module from Turbopack/webpack static analysis
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, no-eval
+  const Database = eval('require')('better-sqlite3');
   db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
@@ -264,7 +267,8 @@ export function getDbCache(connectionId: string, maxAgeMs: number = DEFAULT_CACH
   const rows = db
     .prepare('SELECT * FROM db_metadata_cache WHERE connection_id = ? ORDER BY db_name ASC')
     .all(connectionId)
-    .map((r) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((r: any) => {
       const row = r as DbCacheEntry;
       // SQLite CURRENT_TIMESTAMP is UTC — normalize to ISO 8601 with Z suffix
       const cachedAt = row.cached_at.endsWith('Z') ? row.cached_at : row.cached_at.replace(' ', 'T') + 'Z';

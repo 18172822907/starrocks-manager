@@ -37,7 +37,7 @@ if [ "$DB_TYPE" = "sqlite" ]; then
     const fs = require('fs');
     const path = require('path');
     const cfg = yaml.load(fs.readFileSync('config.yaml', 'utf8'));
-    const p = cfg.database?.sqlite?.path || './data/starrocks-tools.db';
+    const p = cfg.database?.sqlite?.path || './data/starrocks-manager.db';
     console.log(path.isAbsolute(p) ? p : path.join(process.cwd(), p));
   ")
   
@@ -78,7 +78,7 @@ elif [ "$DB_TYPE" = "mysql" ]; then
   MYSQL_PORT=$(node -e "const y=require('js-yaml'),f=require('fs');const c=y.load(f.readFileSync('config.yaml','utf8'));console.log(c.database?.mysql?.port||3306)")
   MYSQL_USER=$(node -e "const y=require('js-yaml'),f=require('fs');const c=y.load(f.readFileSync('config.yaml','utf8'));console.log(c.database?.mysql?.user||'root')")
   MYSQL_PWD=$(node -e "const y=require('js-yaml'),f=require('fs');const c=y.load(f.readFileSync('config.yaml','utf8'));console.log(c.database?.mysql?.password||'')")
-  MYSQL_DB=$(node -e "const y=require('js-yaml'),f=require('fs');const c=y.load(f.readFileSync('config.yaml','utf8'));console.log(c.database?.mysql?.database||'starrocks_tools')")
+  MYSQL_DB=$(node -e "const y=require('js-yaml'),f=require('fs');const c=y.load(f.readFileSync('config.yaml','utf8'));console.log(c.database?.mysql?.database||'starrocks_manager')")
   
   # 创建数据库
   mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" ${MYSQL_PWD:+-p"$MYSQL_PWD"} -e "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DB\` DEFAULT CHARACTER SET utf8mb4;"

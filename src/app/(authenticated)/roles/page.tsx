@@ -14,6 +14,7 @@ import {
   Shield, Key, Eye, ChevronRight, ChevronLeft,
   Wrench, Database, Code, FolderOpen,
 } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 type SortDir = 'asc' | 'desc';
 
@@ -85,7 +86,7 @@ export default function RolesPage() {
     setError('');
     try {
       const url = `/api/roles?sessionId=${encodeURIComponent(session.sessionId)}${forceRefresh ? '&refresh=true' : ''}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       if (data.error) {
         setError(data.error);
@@ -116,7 +117,7 @@ export default function RolesPage() {
     if (!session || !newRole) return;
     setError('');
     try {
-      const res = await fetch('/api/roles', {
+      const res = await apiFetch('/api/roles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, action: 'create', roleName: newRole }),
@@ -135,7 +136,7 @@ export default function RolesPage() {
   async function confirmDelete() {
     if (!session || !deleteConfirm) return;
     try {
-      const res = await fetch('/api/roles', {
+      const res = await apiFetch('/api/roles', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, roleName: deleteConfirm }),
@@ -210,8 +211,8 @@ export default function RolesPage() {
     if (session) {
       try {
         const [catRes, grantRes] = await Promise.all([
-          fetch(`/api/catalogs?sessionId=${encodeURIComponent(session.sessionId)}`),
-          fetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(roleTarget(roleName))}`),
+          apiFetch(`/api/catalogs?sessionId=${encodeURIComponent(session.sessionId)}`),
+          apiFetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(roleTarget(roleName))}`),
         ]);
         const catData = await catRes.json();
         if (catData.catalogs) {
@@ -232,7 +233,7 @@ export default function RolesPage() {
     const cached = metaCacheRef.current.get(cacheKey);
     if (cached && Date.now() - cached.ts < META_TTL) { setGrantDbs(cached.data); if (cached.data.length > 0) setGrantDb(cached.data[0]); return; }
     try {
-      const res = await fetch(`/api/query`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, sql: `SHOW DATABASES FROM \`${catalog}\`` }) });
+      const res = await apiFetch(`/api/query`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, sql: `SHOW DATABASES FROM \`${catalog}\`` }) });
       const data = await res.json();
       if (data.rows) {
         const names = data.rows.map((r: Record<string, unknown>) => String(r['Database'] || Object.values(r)[0]));
@@ -252,7 +253,7 @@ export default function RolesPage() {
       if (objType === 'view') sql = `SHOW FULL TABLES FROM \`${catalog}\`.\`${db}\` WHERE Table_type = 'VIEW'`;
       else if (objType === 'mv') sql = `SHOW MATERIALIZED VIEWS FROM \`${db}\``;
       else sql = `SHOW TABLES FROM \`${catalog}\`.\`${db}\``;
-      const res = await fetch(`/api/query`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, sql }) });
+      const res = await apiFetch(`/api/query`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, sql }) });
       const data = await res.json();
       if (data.rows) {
         const names = objType === 'mv'
@@ -334,7 +335,7 @@ export default function RolesPage() {
     try {
       const stmts = sqlFull.split(';').map(s => s.trim()).filter(Boolean);
       for (const sql of stmts) {
-        const res = await fetch('/api/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, sql }) });
+        const res = await apiFetch('/api/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, sql }) });
         const data = await res.json();
         if (data.error) { setError(data.error); return; }
       }
@@ -351,12 +352,12 @@ export default function RolesPage() {
     const revokeSQL = rawGrant.replace(/^GRANT\b/i, 'REVOKE').replace(/\bTO\b/i, 'FROM');
     setQuickRevoking(true); setError('');
     try {
-      const res = await fetch('/api/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, sql: revokeSQL }) });
+      const res = await apiFetch('/api/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, sql: revokeSQL }) });
       const data = await res.json();
       if (data.error) { setError(data.error); return; }
       setSuccess('已撤销');
       grantDirtyRef.current = true;
-      const gRes = await fetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(roleTarget(showGrant))}`);
+      const gRes = await apiFetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(roleTarget(showGrant))}`);
       const gData = await gRes.json();
       if (gData.grants) setGrantExisting(classifyGrants(gData.grants, gData.catalogGrants));
     } catch (err) { setError(String(err)); }
@@ -377,7 +378,7 @@ export default function RolesPage() {
     setUserSubmitting(false);
     if (!session) return;
     try {
-      const res = await fetch(`/api/users?sessionId=${encodeURIComponent(session.sessionId)}`);
+      const res = await apiFetch(`/api/users?sessionId=${encodeURIComponent(session.sessionId)}`);
       const data = await res.json();
       if (!data.error && data.users) {
         setAllUsers(data.users);
@@ -408,12 +409,12 @@ export default function RolesPage() {
       const ops: Promise<Response>[] = [];
       for (const userId of userRightSet) {
         if (!userOriginalSet.has(userId)) {
-          ops.push(fetch('/api/grants', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, action: 'grant_role', grantee: userId, roleName: showUserAssign }) }));
+          ops.push(apiFetch('/api/grants', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, action: 'grant_role', grantee: userId, roleName: showUserAssign }) }));
         }
       }
       for (const userId of userOriginalSet) {
         if (!userRightSet.has(userId)) {
-          ops.push(fetch('/api/grants', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, action: 'revoke_role', grantee: userId, roleName: showUserAssign }) }));
+          ops.push(apiFetch('/api/grants', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, action: 'revoke_role', grantee: userId, roleName: showUserAssign }) }));
         }
       }
       if (ops.length === 0) { setShowUserAssign(null); return; }
@@ -536,7 +537,7 @@ export default function RolesPage() {
                               setPrivLoading(true);
                               setError('');
                               try {
-                                const gRes = await fetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(roleTarget(name))}`);
+                                const gRes = await apiFetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(roleTarget(name))}`);
                                 const gData = await gRes.json();
                                 if (gData.error) { setError(gData.error); } else {
                                   setShowPrivDetail({ role: name, grants: gData.grants || [], catalogGrants: gData.catalogGrants });

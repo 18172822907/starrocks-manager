@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.gitignore
+*.tar.gz
+*.md
+docs/
+.agent/
+data/
+logs/
+app.pid
+.env*
+.DS_Store
+dist/
+.Dockerfile.offline

@@ -795,31 +795,38 @@ code, pre {
   overflow-x: auto;
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
+  position: relative;
+  --frozen-left: 0px;
+  --frozen-right: 0px;
 }
 
-/* Force table scrollbar to always be visible and have a fixed height track */
+/* Scrollbar — subtle, track aligned to scrollable area */
 .table-container::-webkit-scrollbar {
-  height: 8px;
-  display: block;
+  height: 6px;
 }
 .table-container::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-secondary);
+  background: transparent;
+  margin-left: var(--frozen-left);
+  margin-right: var(--frozen-right);
 }
 .table-container::-webkit-scrollbar-thumb {
-  background: var(--gray-400);
-  border-radius: 4px;
+  background: var(--gray-300);
+  border-radius: 3px;
 }
-[data-theme="dark"] .table-container::-webkit-scrollbar-track {
-  background: var(--gray-800);
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
 }
 [data-theme="dark"] .table-container::-webkit-scrollbar-thumb {
   background: var(--gray-600);
 }
+[data-theme="dark"] .table-container::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-500);
+}
 
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.85rem;
 }
 
@@ -843,6 +850,7 @@ td {
   padding: 6px 12px;
   border-bottom: 1px solid var(--border-secondary);
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
 tr:last-child td {
@@ -851,6 +859,68 @@ tr:last-child td {
 
 tr:hover td {
   background: var(--bg-hover);
+}
+
+/* ---- Sticky Columns ---- */
+/* Left frozen column (IP/名称 — the identifier column) */
+.col-sticky-left {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--bg-primary);
+}
+
+/* Right frozen column (操作) */
+.col-sticky-right {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--bg-primary);
+}
+
+/* Header sticky — higher z-index */
+thead .col-sticky-left,
+thead .col-sticky-right {
+  background: var(--bg-tertiary);
+  z-index: 3;
+}
+
+/* Hover — match row highlight */
+tr:hover .col-sticky-left,
+tr:hover .col-sticky-right {
+  background: var(--bg-hover);
+}
+
+/* Shadow on left frozen right edge */
+.col-sticky-left::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -6px;
+  width: 6px;
+  pointer-events: none;
+  background: linear-gradient(to right, rgba(0,0,0,0.05), transparent);
+}
+
+/* Shadow on right frozen left edge */
+.col-sticky-right::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  width: 6px;
+  pointer-events: none;
+  background: linear-gradient(to left, rgba(0,0,0,0.05), transparent);
+}
+
+[data-theme="dark"] .col-sticky-left::after {
+  background: linear-gradient(to right, rgba(0,0,0,0.2), transparent);
+}
+
+[data-theme="dark"] .col-sticky-right::before {
+  background: linear-gradient(to left, rgba(0,0,0,0.2), transparent);
 }
 
 /* ---- Button ---- */

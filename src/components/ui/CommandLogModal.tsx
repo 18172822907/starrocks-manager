@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { Modal } from './Modal';
 import { Search, Trash2, CheckCircle2, XCircle, Clock, Database, RefreshCw, ClipboardList, Copy, Check } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface LogEntry {
   id: number;
@@ -35,7 +36,7 @@ export function CommandLogModal({ open, onClose, source, title }: CommandLogModa
     if (!session || !open) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/command-log?sessionId=${encodeURIComponent(session.sessionId)}&source=${encodeURIComponent(source)}&limit=100`);
+      const res = await apiFetch(`/api/command-log?sessionId=${encodeURIComponent(session.sessionId)}&source=${encodeURIComponent(source)}&limit=100`);
       const data = await res.json();
       setLogs(data.logs || []);
     } catch { /* ignore */ }
@@ -48,7 +49,7 @@ export function CommandLogModal({ open, onClose, source, title }: CommandLogModa
   async function handleClear() {
     if (!session) return;
     try {
-      await fetch('/api/command-log', {
+      await apiFetch('/api/command-log', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, source }),

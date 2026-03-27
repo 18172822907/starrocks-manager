@@ -8,6 +8,7 @@ import { str } from '@/lib/utils';
 import { PageHeader, StatusBadge, DatabaseBadge, SearchToolbar, DataTable, ErrorBanner, SuccessToast, CacheTimeBadge } from '@/components/ui';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { HardDrive, XCircle, Database } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 export default function BrokerLoadPage() {
   const { session } = useSession();
@@ -38,7 +39,7 @@ export default function BrokerLoadPage() {
   async function handleCancel(db: string, label: string) {
     if (!session) return;
     try {
-      const res = await fetch('/api/broker-load', {
+      const res = await apiFetch('/api/broker-load', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, action: 'cancel', dbName: db, label }),
       });

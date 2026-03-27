@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from '@/hooks/useSession';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface UseDataFetchOptions<T> {
   /** API URL builder (receives sessionId, isRefresh) */
@@ -43,7 +44,7 @@ export function useDataFetch<T>(opts: UseDataFetchOptions<T>, initialData: T): U
     if (force) setRefreshing(true); else setLoading(true);
     setError('');
     try {
-      const res = await fetch(optsRef.current.url(session.sessionId, force));
+      const res = await apiFetch(optsRef.current.url(session.sessionId, force));
       const json = await res.json();
       if (json.error) setError(json.error);
       else {

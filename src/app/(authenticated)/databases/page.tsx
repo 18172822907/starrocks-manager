@@ -9,6 +9,7 @@ import Link from 'next/link';
 import {
   Database, Search, Table2, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, ArrowRight, Clock, Eye, Layers
 } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface DbInfo {
   name: string;
@@ -46,7 +47,7 @@ export default function DatabasesPage() {
     setError('');
     try {
       const url = `/api/databases?sessionId=${encodeURIComponent(session.sessionId)}${forceRefresh ? '&refresh=true' : ''}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       if (data.error) {
         setError(data.error);

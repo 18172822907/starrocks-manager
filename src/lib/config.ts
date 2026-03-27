@@ -40,8 +40,8 @@ const DEFAULTS: AppConfig = {
   server: { port: 3000, node_env: 'development' },
   database: {
     type: 'sqlite',
-    sqlite: { path: './data/starrocks-tools.db' },
-    mysql: { host: '127.0.0.1', port: 3306, user: 'root', password: '', database: 'starrocks_tools' },
+    sqlite: { path: './data/starrocks-manager.db' },
+    mysql: { host: '127.0.0.1', port: 3306, user: 'root', password: '', database: 'starrocks_manager' },
   },
   admin: { password: 'Admin@2024' },
   health_check: { interval: 300 },

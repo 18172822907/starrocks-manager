@@ -13,6 +13,7 @@ import {
   ChevronUp, ChevronDown, ChevronsUpDown, Clock, Key, ShieldCheck, ChevronRight, ChevronLeft,
   Shield, ShieldOff, UserPlus, Eye, Wrench, Database, Code, FolderOpen,
 } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 const SYSTEM_ROLES = new Set(['root', 'cluster_admin', 'db_admin', 'user_admin', 'public']);
 
@@ -99,7 +100,7 @@ export default function UsersPage() {
     setError('');
     try {
       const url = `/api/users?sessionId=${encodeURIComponent(session.sessionId)}${forceRefresh ? '&refresh=true' : ''}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       if (data.error) setError(data.error);
       else {
@@ -145,7 +146,7 @@ export default function UsersPage() {
     // Fetch all roles if not cached
     if (allRoles.length === 0) {
       try {
-        const res = await fetch(`/api/roles?sessionId=${encodeURIComponent(session.sessionId)}`);
+        const res = await apiFetch(`/api/roles?sessionId=${encodeURIComponent(session.sessionId)}`);
         const data = await res.json();
         if (!data.error) {
           const names: string[] = (data.roles || []).map((r: Record<string, unknown>) =>
@@ -162,7 +163,7 @@ export default function UsersPage() {
     setCreating(true); setError('');
     try {
       const roles = form.roles ? form.roles.split(',').map(r => r.trim()).filter(Boolean) : [];
-      const res = await fetch('/api/users', {
+      const res = await apiFetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -189,7 +190,7 @@ export default function UsersPage() {
     if (!session || !deleteConfirm) return;
     const { user, host } = parseIdentity(deleteConfirm);
     try {
-      const res = await fetch('/api/users', {
+      const res = await apiFetch('/api/users', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, username: user, host }),
@@ -350,8 +351,8 @@ export default function UsersPage() {
     if (session) {
       try {
         const [catRes, grantRes] = await Promise.all([
-          fetch(`/api/catalogs?sessionId=${encodeURIComponent(session.sessionId)}`),
-          fetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(identity)}`),
+          apiFetch(`/api/catalogs?sessionId=${encodeURIComponent(session.sessionId)}`),
+          apiFetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(identity)}`),
         ]);
         const catData = await catRes.json();
         if (catData.catalogs) {
@@ -385,7 +386,7 @@ export default function UsersPage() {
       return;
     }
     try {
-      const res = await fetch(`/api/query`, {
+      const res = await apiFetch(`/api/query`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, sql: `SHOW DATABASES FROM \`${catalog}\`` }),
       });
@@ -418,7 +419,7 @@ export default function UsersPage() {
       } else {
         sql = `SHOW TABLES FROM \`${catalog}\`.\`${db}\``;
       }
-      const res = await fetch(`/api/query`, {
+      const res = await apiFetch(`/api/query`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, sql }),
       });
@@ -533,7 +534,7 @@ export default function UsersPage() {
       // Split multiple statements and execute one by one
       const stmts = sqlFull.split(';').map(s => s.trim()).filter(Boolean);
       for (const sql of stmts) {
-        const res = await fetch('/api/query', {
+        const res = await apiFetch('/api/query', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId: session.sessionId, sql }),
         });
@@ -555,7 +556,7 @@ export default function UsersPage() {
     setQuickRevoking(true);
     setError('');
     try {
-      const res = await fetch('/api/query', {
+      const res = await apiFetch('/api/query', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, sql: revokeSQL }),
       });
@@ -564,7 +565,7 @@ export default function UsersPage() {
       setSuccess('已撤销');
       grantDirtyRef.current = true;
       // Refresh existing privileges in modal + main table
-      const gRes = await fetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(showGrant)}`);
+      const gRes = await apiFetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(showGrant)}`);
       const gData = await gRes.json();
       if (gData.grants) {
         setGrantExisting(classifyGrants(gData.grants, gData.catalogGrants));
@@ -591,7 +592,7 @@ export default function UsersPage() {
       // Grant new roles
       for (const role of roleRightSet) {
         if (!roleOriginalSet.has(role)) {
-          ops.push(fetch('/api/grants', {
+          ops.push(apiFetch('/api/grants', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId: session.sessionId, action: 'grant_role', grantee: showRoleAssign, roleName: role }),
           }));
@@ -600,7 +601,7 @@ export default function UsersPage() {
       // Revoke removed roles
       for (const role of roleOriginalSet) {
         if (!roleRightSet.has(role)) {
-          ops.push(fetch('/api/grants', {
+          ops.push(apiFetch('/api/grants', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId: session.sessionId, action: 'revoke_role', grantee: showRoleAssign, roleName: role }),
           }));
@@ -818,7 +819,7 @@ export default function UsersPage() {
                           <button
                             onClick={async () => {
                               try {
-                                const gRes = await fetch(`/api/grants?sessionId=${encodeURIComponent(session!.sessionId)}&target=${encodeURIComponent(u.identity)}`);
+                                const gRes = await apiFetch(`/api/grants?sessionId=${encodeURIComponent(session!.sessionId)}&target=${encodeURIComponent(u.identity)}`);
                                 const gData = await gRes.json();
                                 setShowPrivDetail({
                                   identity: u.identity,
@@ -1385,7 +1386,7 @@ export default function UsersPage() {
                                 e.stopPropagation();
                                 if (!session) return;
                                 try {
-                                  const res = await fetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(`ROLE '${r}'`)}`);
+                                  const res = await apiFetch(`/api/grants?sessionId=${encodeURIComponent(session.sessionId)}&target=${encodeURIComponent(`ROLE '${r}'`)}`);
                                   const data = await res.json();
                                   if (!data.error) {
                                     setShowPrivDetail({ identity: `角色: ${r}`, grants: data.grants || [], catalogGrants: data.catalogGrants });

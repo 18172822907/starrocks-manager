@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 export type SysRole = 'admin' | 'editor' | 'viewer';
 export type ClusterStatus = 'online' | 'offline' | 'unknown' | 'switching';
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshAuth = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth');
+      const res = await apiFetch('/api/auth');
       const data = await res.json();
       if (data.authenticated) {
         setUser(data.user);
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cluster) {
           try {
             const sid = `${cluster.host}:${cluster.port}`;
-            const hRes = await fetch(`/api/health?sessionId=${encodeURIComponent(sid)}`);
+            const hRes = await apiFetch(`/api/health?sessionId=${encodeURIComponent(sid)}`);
             const hData = await hRes.json();
             setClusterStatus(hData.ok ? 'online' : 'offline');
           } catch {
@@ -92,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (username: string, password: string) => {
     try {
-      const res = await fetch('/api/auth', {
+      const res = await apiFetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'login', username, password }),
@@ -115,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch('/api/auth', {
+      await apiFetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'logout' }),
@@ -124,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setClusters([]);
     setActiveCluster(null);
-    window.location.href = '/';
+    window.location.href = '/starrocks-manager/';
   }, []);
 
   const switchCluster = useCallback(async (clusterId: number) => {
@@ -133,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setClusterStatus('switching');
 
     try {
-      const res = await fetch(`/api/clusters/${clusterId}/activate`, { method: 'POST' });
+      const res = await apiFetch(`/api/clusters/${clusterId}/activate`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         const cluster = clusters.find(c => c.id === clusterId) || null;
@@ -143,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cluster) {
           try {
             const sid = `${cluster.host}:${cluster.port}`;
-            const hRes = await fetch(`/api/health?sessionId=${encodeURIComponent(sid)}`);
+            const hRes = await apiFetch(`/api/health?sessionId=${encodeURIComponent(sid)}`);
             const hData = await hRes.json();
             setClusterStatus(hData.ok ? 'online' : 'offline');
           } catch {
@@ -177,7 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const pollHealth = async () => {
       try {
-        const res = await fetch('/api/cluster-health-stream');
+        const res = await apiFetch('/api/cluster-health-stream');
         if (!res.ok) return;
         const data = await res.json();
         const clustersHealth = data.clusters as Record<string, { status: string; version?: string; checkedAt: string }>;

@@ -9,6 +9,7 @@ import {
   ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
+import { apiFetch } from '@/lib/fetch-patch';
 
 type SortDir = 'asc' | 'desc';
 
@@ -51,7 +52,7 @@ export default function FunctionsPage() {
     setError('');
     try {
       const url = `/api/functions?sessionId=${encodeURIComponent(session.sessionId)}${forceRefresh ? '&refresh=true' : ''}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       if (data.error) setError(data.error);
       else {

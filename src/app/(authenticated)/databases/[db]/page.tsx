@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Search, Table2, RefreshCw, Eye, Layers } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface TableInfo {
   TABLE_NAME: string;
@@ -61,7 +62,7 @@ export default function DatabaseDetailPage() {
     if (!session) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/databases/${encodeURIComponent(db)}?sessionId=${encodeURIComponent(session.sessionId)}`);
+      const res = await apiFetch(`/api/databases/${encodeURIComponent(db)}?sessionId=${encodeURIComponent(session.sessionId)}`);
       const data = await res.json();
       if (data.error) setError(data.error);
       else setTables(data.tables || []);

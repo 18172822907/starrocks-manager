@@ -5,6 +5,7 @@ import { useSession } from '@/hooks/useSession';
 import { Play, Clock, Download, Trash2, Terminal } from 'lucide-react';
 import { CommandLogButton } from '@/components/ui';
 import Breadcrumb from '@/components/Breadcrumb';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface QueryResult {
   rows: Record<string, unknown>[];
@@ -42,7 +43,7 @@ export default function QueryPage() {
     const entry: HistoryEntry = { sql: sql.trim(), timestamp: Date.now() };
 
     try {
-      const res = await fetch('/api/query', {
+      const res = await apiFetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, sql: sql.trim() }),

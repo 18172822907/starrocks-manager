@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { apiFetch } from '@/lib/fetch-patch';
 
 // Bridge interface — same shape as the old useSession for backward compatibility
 export interface SessionInfo {
@@ -53,7 +54,7 @@ export function useSession() {
     if (!sessionIdForHealth) return;
     setRetrying(true);
     try {
-      const res = await fetch(`/api/health?sessionId=${encodeURIComponent(sessionIdForHealth)}`);
+      const res = await apiFetch(`/api/health?sessionId=${encodeURIComponent(sessionIdForHealth)}`);
       const data = await res.json();
       if (data.ok) {
         setClusterStatus('online');

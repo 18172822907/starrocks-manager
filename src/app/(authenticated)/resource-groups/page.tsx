@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import Breadcrumb from '@/components/Breadcrumb';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface ResourceGroup {
   name: string;
@@ -147,7 +148,7 @@ export default function ResourceGroupsPage() {
     setError('');
     try {
       const url = `/api/resource-groups?sessionId=${encodeURIComponent(session.sessionId)}${forceRefresh ? '&refresh=true' : ''}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       if (data.error) setError(data.error);
       else {
@@ -171,7 +172,7 @@ export default function ResourceGroupsPage() {
     if (!session || !form.name) return;
     setCreating(true); setError('');
     try {
-      const res = await fetch('/api/resource-groups', {
+      const res = await apiFetch('/api/resource-groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, action: 'create', ...form }),
@@ -186,7 +187,7 @@ export default function ResourceGroupsPage() {
   async function handleDelete(name: string) {
     if (!session) return;
     try {
-      const res = await fetch('/api/resource-groups', {
+      const res = await apiFetch('/api/resource-groups', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, name }),
@@ -216,7 +217,7 @@ export default function ResourceGroupsPage() {
     if (!session || !editGroup) return;
     setSaving(true); setError('');
     try {
-      const res = await fetch('/api/resource-groups', {
+      const res = await apiFetch('/api/resource-groups', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -238,7 +239,7 @@ export default function ResourceGroupsPage() {
   async function handleDropClassifier(groupName: string, classifierId: string) {
     if (!session) return;
     try {
-      const res = await fetch('/api/resource-groups', {
+      const res = await apiFetch('/api/resource-groups', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, name: groupName, action: 'drop_classifier', classifierId }),
@@ -253,7 +254,7 @@ export default function ResourceGroupsPage() {
   async function handleAddClassifier() {
     if (!session || !addClassifier || !classifierInput) return;
     try {
-      const res = await fetch('/api/resource-groups', {
+      const res = await apiFetch('/api/resource-groups', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, name: addClassifier, action: 'add_classifier', classifierProps: classifierInput }),

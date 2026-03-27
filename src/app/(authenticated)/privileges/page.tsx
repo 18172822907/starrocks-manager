@@ -6,6 +6,7 @@ import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/ui';
 import { Shield, RefreshCw, Search, Plus, X } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
+import { apiFetch } from '@/lib/fetch-patch';
 
 export default function PrivilegesPage() {
   const { session } = useSession();
@@ -35,7 +36,7 @@ export default function PrivilegesPage() {
     if (!session) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/privileges?sessionId=${encodeURIComponent(session.sessionId)}`);
+      const res = await apiFetch(`/api/privileges?sessionId=${encodeURIComponent(session.sessionId)}`);
       const data = await res.json();
       if (data.error) setError(data.error);
       else setGrants(data.grants || []);
@@ -47,7 +48,7 @@ export default function PrivilegesPage() {
     if (!session || !form.grantee || !form.privilege) return;
     setError('');
     try {
-      const res = await fetch('/api/privileges', {
+      const res = await apiFetch('/api/privileges', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, ...form }),

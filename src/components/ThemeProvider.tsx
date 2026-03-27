@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -41,7 +42,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     updateResolvedTheme(newTheme);
 
     // Also persist to server
-    fetch('/api/settings', {
+    apiFetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: 'theme', value: newTheme }),

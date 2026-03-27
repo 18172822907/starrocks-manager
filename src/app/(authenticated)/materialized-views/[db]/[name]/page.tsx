@@ -8,6 +8,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import dynamic from 'next/dynamic';
 const SqlHighlighter = dynamic(() => import('@/components/SqlHighlighter'), { ssr: false });
 import { Modal } from '@/components/ui/Modal';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface ColumnInfo {
   Field: string;
@@ -370,7 +371,7 @@ export default function MVDetailPage() {
     if (!session) return;
     setLoading(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/materialized-views/${encodeURIComponent(db)}/${encodeURIComponent(name)}?sessionId=${encodeURIComponent(session.sessionId)}&limit=${limit}`
       );
       const data = await res.json();
@@ -392,7 +393,7 @@ export default function MVDetailPage() {
     if (!session) return;
     setPreviewLoading(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/materialized-views/${encodeURIComponent(db)}/${encodeURIComponent(name)}?sessionId=${encodeURIComponent(session.sessionId)}&limit=${limit}`
       );
       const data = await res.json();
@@ -405,7 +406,7 @@ export default function MVDetailPage() {
     if (!session || taskRunsLoaded) return;
     setTaskRunsLoading(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/materialized-views/${encodeURIComponent(db)}/${encodeURIComponent(name)}?sessionId=${encodeURIComponent(session.sessionId)}&section=task_runs`
       );
       const data = await res.json();
@@ -433,7 +434,7 @@ export default function MVDetailPage() {
   // ========== Management Actions ==========
   async function postAction(body: Record<string, unknown>) {
     if (!session) return null;
-    const res = await fetch('/api/materialized-views', {
+    const res = await apiFetch('/api/materialized-views', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: session.sessionId, ...body }),

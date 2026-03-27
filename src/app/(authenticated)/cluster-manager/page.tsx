@@ -6,6 +6,7 @@ import { PageHeader, ErrorBanner, SuccessToast, DataTable } from '@/components/u
 import { Network, Plus, Zap, Trash2, Pencil, X, Check, AlertCircle, RefreshCw, Power } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface Cluster {
   id: number;
@@ -63,7 +64,7 @@ export default function ClusterManagerPage() {
 
   const fetchClusters = useCallback(async () => {
     try {
-      const res = await fetch('/api/clusters');
+      const res = await apiFetch('/api/clusters');
       const data = await res.json();
       if (data.error) { setError(data.error); return; }
       setClusters(data.clusters || []);
@@ -77,7 +78,7 @@ export default function ClusterManagerPage() {
     const sessionId = `${c.host}:${c.port}`;
     setHealthMap(prev => ({ ...prev, [c.id]: { ...prev[c.id], status: 'checking' } }));
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/health?sessionId=${encodeURIComponent(sessionId)}`,
         { signal }
       );
@@ -165,7 +166,7 @@ export default function ClusterManagerPage() {
   async function handleTestConnection() {
     setFormTestResult(''); setFormError('');
     try {
-      const res = await fetch('/api/clusters', {
+      const res = await apiFetch('/api/clusters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -194,7 +195,7 @@ export default function ClusterManagerPage() {
         ? { id: editCluster.id, ...form, port: parseInt(form.port) || 9030, password: form.password || undefined }
         : { ...form, port: parseInt(form.port) || 9030 };
 
-      const res = await fetch('/api/clusters', {
+      const res = await apiFetch('/api/clusters', {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -215,7 +216,7 @@ export default function ClusterManagerPage() {
 
   async function handleDelete(id: number) {
     try {
-      const res = await fetch('/api/clusters', {
+      const res = await apiFetch('/api/clusters', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),

@@ -117,7 +117,7 @@ export default function LoginPage() {
           padding: '12px 16px',
           borderTop: '1px solid var(--border-secondary)',
         }}>
-          首次使用？默认账号 <strong style={{ color: 'var(--text-secondary)' }}>admin</strong> / <strong style={{ color: 'var(--text-secondary)' }}>admin123</strong>
+          首次使用？默认账号 <strong style={{ color: 'var(--text-secondary)' }}>admin</strong> / <strong style={{ color: 'var(--text-secondary)' }}>Admin@2024</strong>
         </div>
 
         <div className="login-footer">

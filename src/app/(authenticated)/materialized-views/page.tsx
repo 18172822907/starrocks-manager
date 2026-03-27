@@ -12,6 +12,7 @@ import {
   RefreshCw, Search, Clock, Eye, Trash2, Play, Plus,
   AlertTriangle,
 } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 const STATUS_STYLE: Record<string, { bg: string; border: string; color: string }> = {
   SUCCESS: { bg: 'rgba(22,163,74,0.08)', border: 'rgba(22,163,74,0.2)', color: 'var(--success-600)' },
@@ -51,7 +52,7 @@ export default function MaterializedViewsPage() {
     setError('');
     try {
       const url = `/api/materialized-views?sessionId=${encodeURIComponent(session.sessionId)}${forceRefresh ? '&refresh=true' : ''}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       if (data.error) setError(data.error);
       else {
@@ -78,7 +79,7 @@ export default function MaterializedViewsPage() {
 
   async function postAction(body: Record<string, unknown>) {
     if (!session) return null;
-    const res = await fetch('/api/materialized-views', {
+    const res = await apiFetch('/api/materialized-views', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: session.sessionId, ...body }),

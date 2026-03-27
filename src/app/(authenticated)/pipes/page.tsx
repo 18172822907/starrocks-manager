@@ -8,6 +8,7 @@ import { str } from '@/lib/utils';
 import { PageHeader, StatusBadge, DatabaseBadge, SearchToolbar, DataTable, ErrorBanner, SuccessToast, CacheTimeBadge } from '@/components/ui';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Pause, Play, Trash2, Database, GitBranch } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 export default function PipesPage() {
   const { session } = useSession();
@@ -32,7 +33,7 @@ export default function PipesPage() {
     if (!session) return;
     const labels: Record<string, string> = { suspend: '暂停', resume: '恢复', drop: '删除' };
     try {
-      const res = await fetch('/api/pipes', {
+      const res = await apiFetch('/api/pipes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, action, dbName: db, pipeName: name }),
       });

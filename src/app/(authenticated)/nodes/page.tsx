@@ -7,6 +7,7 @@ import { str } from '@/lib/utils';
 import { PageHeader, VersionBadge, ErrorBanner, SuccessToast, Modal, SqlPreview, CommandLogButton } from '@/components/ui';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Server, Plus, Trash2, Cpu, HardDrive, Activity, AlertTriangle, Network, RefreshCw } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 function StatusDot({ alive }: { alive: boolean }) {
   return (
@@ -68,7 +69,7 @@ export default function NodesPage() {
   async function handleNodeAction(action: string, nodeType: string, host: string, port: string, brokerName?: string) {
     if (!session) return;
     try {
-      const res = await fetch('/api/nodes', {
+      const res = await apiFetch('/api/nodes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, action, nodeType, host, port, brokerName }),
       });
@@ -127,12 +128,12 @@ export default function NodesPage() {
           frontends.length === 0 ? (
             <div className="empty-state"><Server size={48} /><div className="empty-state-text">暂无 FE 节点</div></div>
           ) : (
-            <div className="table-container fade-in" style={{ overflowX: 'auto' }}>
+            <div className="table-container fade-in" style={{ overflowX: 'auto', '--frozen-left': '170px', '--frozen-right': '64px' } as React.CSSProperties}>
               <table style={{ width: '100%', tableLayout: 'auto' }}>
                 <thead>
                   <tr>
                     <th style={{ width: '44px', textAlign: 'center' }}>#</th>
-                    <th style={{ minWidth: '130px' }}>IP</th>
+                    <th className="col-sticky-left" style={{ minWidth: '130px' }}>IP</th>
                     <th style={{ minWidth: '80px' }}>角色</th>
                     <th style={{ minWidth: '60px' }}>状态</th>
                     <th>Query 端口</th><th>HTTP 端口</th><th>EditLog 端口</th>
@@ -141,7 +142,7 @@ export default function NodesPage() {
                     <th style={{ minWidth: '130px' }}>最后心跳</th>
                     <th>Helper</th>
                     <th style={{ minWidth: '100px' }}>错误信息</th>
-                    <th style={{ textAlign: 'center', width: '64px' }}>操作</th>
+                    <th className="col-sticky-right" style={{ textAlign: 'center', width: '64px' }}>操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -152,7 +153,7 @@ export default function NodesPage() {
                     return (
                       <tr key={idx}>
                         <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.76rem' }}>{idx + 1}</td>
-                        <td>
+                        <td className="col-sticky-left">
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                             <div style={{ width: '30px', height: '30px', borderRadius: 'var(--radius-md)', backgroundColor: isLeader ? 'rgba(234,179,8,0.1)' : 'rgba(37,99,235,0.08)', color: isLeader ? 'var(--warning-600)' : 'var(--primary-600)', border: `1px solid ${isLeader ? 'rgba(234,179,8,0.25)' : 'rgba(37,99,235,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               <Server size={14} />
@@ -173,7 +174,7 @@ export default function NodesPage() {
                         <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{str(fe['LastHeartbeat'])}</td>
                         <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{str(fe['IsHelper']) === 'true' ? '✓' : '—'}</td>
                         <td><ErrCell msg={str(fe['ErrMsg'])} /></td>
-                        <td style={{ textAlign: 'center' }}>
+                        <td className="col-sticky-right" style={{ textAlign: 'center' }}>
                           {!isLeader && <button className="btn-action btn-action-danger" onClick={() => setNodeConfirm({ action: 'drop', nodeType: 'fe', host: ip, port: editLogPort, message: `确定要移除节点 ${ip}:${editLogPort} 吗？` })} title="移除节点"><Trash2 size={14} /></button>}
                         </td>
                       </tr>
@@ -204,12 +205,12 @@ export default function NodesPage() {
                 ))}
               </div>
 
-              <div className="table-container fade-in" style={{ overflowX: 'auto' }}>
+              <div className="table-container fade-in" style={{ overflowX: 'auto', '--frozen-left': '170px', '--frozen-right': '80px' } as React.CSSProperties}>
                 <table style={{ width: '100%', tableLayout: 'auto' }}>
                   <thead>
                     <tr>
                       <th style={{ width: '44px', textAlign: 'center' }}>#</th>
-                      <th style={{ minWidth: '130px' }}>IP</th>
+                      <th className="col-sticky-left" style={{ minWidth: '130px' }}>IP</th>
                       <th style={{ minWidth: '60px' }}>状态</th>
                       <th style={{ minWidth: '60px' }}>CPU</th>
                       <th style={{ minWidth: '120px' }}>内存使用</th>
@@ -221,7 +222,7 @@ export default function NodesPage() {
                       <th style={{ minWidth: '130px' }}>启动时间</th>
                       <th style={{ minWidth: '130px' }}>最后心跳</th>
                       <th style={{ minWidth: '100px' }}>错误信息</th>
-                      <th style={{ textAlign: 'center', width: '80px' }}>操作</th>
+                      <th className="col-sticky-right" style={{ textAlign: 'center', width: '80px' }}>操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -238,7 +239,7 @@ export default function NodesPage() {
                       return (
                         <tr key={idx} style={decommissioned ? { opacity: 0.5 } : undefined}>
                           <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.76rem' }}>{idx + 1}</td>
-                          <td>
+                          <td className="col-sticky-left">
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                               <div style={{ width: '30px', height: '30px', borderRadius: 'var(--radius-md)', backgroundColor: alive ? 'rgba(22,163,74,0.08)' : 'rgba(239,68,68,0.08)', color: alive ? 'var(--success-600)' : 'var(--danger-500)', border: `1px solid ${alive ? 'rgba(22,163,74,0.2)' : 'rgba(239,68,68,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Cpu size={14} />
@@ -260,7 +261,7 @@ export default function NodesPage() {
                           <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{str(cn['LastStartTime'])}</td>
                           <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{str(cn['LastHeartbeat'])}</td>
                           <td><ErrCell msg={str(cn['ErrMsg'])} /></td>
-                          <td>
+                          <td className="col-sticky-right">
                             <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
                               {!decommissioned && <button className="btn-action btn-action-primary" onClick={() => setNodeConfirm({ action: 'decommission', nodeType: 'cn', host: ip, port: heartbeatPort, message: `确定要下线（Decommission）节点 ${ip}:${heartbeatPort} 吗？` })} title="安全下线"><AlertTriangle size={14} /></button>}
                               <button className="btn-action btn-action-danger" onClick={() => setNodeConfirm({ action: 'drop', nodeType: 'cn', host: ip, port: heartbeatPort, message: `确定要移除节点 ${ip}:${heartbeatPort} 吗？` })} title="移除节点"><Trash2 size={14} /></button>
@@ -278,19 +279,19 @@ export default function NodesPage() {
           brokers.length === 0 ? (
             <div className="empty-state"><Network size={48} /><div className="empty-state-text">暂无 Broker 节点</div></div>
           ) : (
-            <div className="table-container fade-in" style={{ overflowX: 'auto' }}>
+            <div className="table-container fade-in" style={{ overflowX: 'auto', '--frozen-left': '150px', '--frozen-right': '64px' } as React.CSSProperties}>
               <table style={{ width: '100%', tableLayout: 'auto' }}>
                 <thead>
                   <tr>
                     <th style={{ width: '44px', textAlign: 'center' }}>#</th>
-                    <th style={{ minWidth: '120px' }}>名称</th>
+                    <th className="col-sticky-left" style={{ minWidth: '120px' }}>名称</th>
                     <th style={{ minWidth: '130px' }}>IP</th>
                     <th style={{ minWidth: '80px' }}>端口</th>
                     <th style={{ minWidth: '60px' }}>状态</th>
                     <th style={{ minWidth: '130px' }}>启动时间</th>
                     <th style={{ minWidth: '130px' }}>最后心跳</th>
                     <th style={{ minWidth: '100px' }}>错误信息</th>
-                    <th style={{ textAlign: 'center', width: '64px' }}>操作</th>
+                    <th className="col-sticky-right" style={{ textAlign: 'center', width: '64px' }}>操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -300,7 +301,7 @@ export default function NodesPage() {
                     return (
                       <tr key={idx}>
                         <td style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.76rem' }}>{idx + 1}</td>
-                        <td>
+                        <td className="col-sticky-left">
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                             <div style={{ width: '30px', height: '30px', borderRadius: 'var(--radius-md)', backgroundColor: alive ? 'rgba(22,163,74,0.08)' : 'rgba(239,68,68,0.08)', color: alive ? 'var(--success-600)' : 'var(--danger-500)', border: `1px solid ${alive ? 'rgba(22,163,74,0.2)' : 'rgba(239,68,68,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               <Network size={14} />
@@ -314,7 +315,7 @@ export default function NodesPage() {
                         <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{str(br['LastStartTime'])}</td>
                         <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{str(br['LastUpdateTime'] || br['LastHeartbeat'])}</td>
                         <td><ErrCell msg={str(br['ErrMsg'])} /></td>
-                        <td style={{ textAlign: 'center' }}>
+                        <td className="col-sticky-right" style={{ textAlign: 'center' }}>
                           <button className="btn-action btn-action-danger" onClick={() => setNodeConfirm({ action: 'drop', nodeType: 'broker', host: ip, port, message: `确定要移除 Broker ${name} (${ip}:${port}) 吗？`, brokerName: name })} title="移除 Broker"><Trash2 size={14} /></button>
                         </td>
                       </tr>

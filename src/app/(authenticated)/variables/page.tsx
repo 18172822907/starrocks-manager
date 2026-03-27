@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { CommandLogButton } from '@/components/ui';
 import Breadcrumb from '@/components/Breadcrumb';
+import { apiFetch } from '@/lib/fetch-patch';
 
 /* ── Variable Category Mapping ── */
 const CATEGORY_MAP: Record<string, string[]> = {
@@ -100,7 +101,7 @@ export default function VariablesPage() {
     setError('');
     try {
       const url = `/api/variables?sessionId=${encodeURIComponent(session.sessionId)}&scope=${scope}${forceRefresh ? '&refresh=true' : ''}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       if (data.error) setError(data.error);
       else {
@@ -129,7 +130,7 @@ export default function VariablesPage() {
     if (!session) return;
     setSaving(true); setError('');
     try {
-      const res = await fetch('/api/variables', {
+      const res = await apiFetch('/api/variables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

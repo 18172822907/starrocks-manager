@@ -21,6 +21,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { CommandLogButton } from '@/components/ui';
 import SearchableSelect from '@/components/SearchableSelect';
 import Breadcrumb from '@/components/Breadcrumb';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface NodeInfo {
   [key: string]: string | number;
@@ -106,7 +107,7 @@ export default function DashboardPage() {
   const fetchCluster = useCallback(async () => {
     if (!clusterSessionId || connectionFailedRef.current) return;
     try {
-      const res = await fetch(`/api/cluster?sessionId=${encodeURIComponent(clusterSessionId)}`);
+      const res = await apiFetch(`/api/cluster?sessionId=${encodeURIComponent(clusterSessionId)}`);
       const cluster = await res.json();
       if (cluster.error) {
         setError(cluster.error);
@@ -144,7 +145,7 @@ export default function DashboardPage() {
   const fetchQueries = useCallback(async () => {
     if (!session || connectionFailedRef.current) return;
     try {
-      const res = await fetch(`/api/queries?sessionId=${encodeURIComponent(session.sessionId)}`);
+      const res = await apiFetch(`/api/queries?sessionId=${encodeURIComponent(session.sessionId)}`);
       const data = await res.json();
       if (res.ok) {
         const q = data.queries || [];
@@ -258,7 +259,7 @@ export default function DashboardPage() {
   async function handleKillQuery(id: string | number) {
     if (!session) return;
     try {
-      await fetch('/api/queries', {
+      await apiFetch('/api/queries', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, queryId: id }),

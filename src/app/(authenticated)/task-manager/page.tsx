@@ -11,6 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import SqlHighlighter from '@/components/SqlHighlighter';
 import { Trash2, CalendarClock, ChevronDown, ChevronRight, Loader2, Eye, Copy, Check, AlignLeft, RefreshCw } from 'lucide-react';
 import SearchableSelect from '@/components/SearchableSelect';
+import { apiFetch } from '@/lib/fetch-patch';
 
 const noWrap: React.CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 
@@ -119,7 +120,7 @@ export default function TaskManagerPage() {
     if (!session) return;
     setLoadingRuns(taskName);
     try {
-      const res = await fetch(`/api/tasks?sessionId=${encodeURIComponent(session.sessionId)}&type=task_runs&taskName=${encodeURIComponent(taskName)}`);
+      const res = await apiFetch(`/api/tasks?sessionId=${encodeURIComponent(session.sessionId)}&type=task_runs&taskName=${encodeURIComponent(taskName)}`);
       const data = await res.json();
       setTaskRuns(prev => ({ ...prev, [taskName]: data.runs || [] }));
     } catch {
@@ -131,7 +132,7 @@ export default function TaskManagerPage() {
   async function handleDrop(name: string) {
     if (!session) return;
     try {
-      const res = await fetch('/api/tasks', {
+      const res = await apiFetch('/api/tasks', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId, action: 'drop', taskName: name }),
       });

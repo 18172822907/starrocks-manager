@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Copy, Check, RefreshCw } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
+import { apiFetch } from '@/lib/fetch-patch';
 
 interface ColumnInfo {
   Field: string;
@@ -41,7 +42,7 @@ export default function TableDetailPage() {
     if (!session) return;
     setLoading(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/databases/${encodeURIComponent(db)}/${encodeURIComponent(table)}?sessionId=${encodeURIComponent(session.sessionId)}&limit=${limit}`
       );
       const data = await res.json();
@@ -63,7 +64,7 @@ export default function TableDetailPage() {
     if (!session) return;
     setPreviewLoading(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/databases/${encodeURIComponent(db)}/${encodeURIComponent(table)}?sessionId=${encodeURIComponent(session.sessionId)}&limit=${limit}`
       );
       const data = await res.json();

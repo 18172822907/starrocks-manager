@@ -8,6 +8,7 @@ import ClusterOfflineBanner from '@/components/ClusterOfflineBanner';
 import { useAuth } from '@/hooks/useAuth';
 import { Modal } from '@/components/ui/Modal';
 import { LogOut, ChevronDown, User, Check, Server, KeyRound, AlertCircle } from 'lucide-react';
+import { apiFetch } from '@/lib/fetch-patch';
 
 // Pages that don't require an active cluster to be selected
 const CLUSTER_EXEMPT_PATHS = ['/cluster-manager', '/sys-users', '/design-system'];
@@ -52,7 +53,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setRetrying(true);
     try {
       const sid = `${activeCluster.host}:${activeCluster.port}`;
-      const res = await fetch(`/api/health?sessionId=${encodeURIComponent(sid)}`);
+      const res = await apiFetch(`/api/health?sessionId=${encodeURIComponent(sid)}`);
       const data = await res.json();
       if (data.ok) {
         setClusterStatus('online');
@@ -82,7 +83,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setPwdSaving(true);
     setPwdError('');
     try {
-      const res = await fetch('/api/auth', {
+      const res = await apiFetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -117,7 +118,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && !user) {
-      window.location.href = '/';
+      window.location.href = '/starrocks-manager/';
     }
   }, [loading, user]);
 

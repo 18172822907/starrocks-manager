@@ -3,7 +3,8 @@
  * All local-db operations use this interface, making the storage backend swappable.
  */
 
-import Database from 'better-sqlite3';
+// better-sqlite3 is loaded dynamically in SqliteAdapter to avoid
+// Turbopack static resolution failures when the native module is absent (e.g. MySQL-only Docker builds).
 import mysql from 'mysql2/promise';
 import { config } from './config';
 import { logger } from './logger';
@@ -41,14 +42,18 @@ export interface PreparedStatement {
 
 export class SqliteAdapter implements DbAdapter {
   readonly dialect = 'sqlite' as const;
-  private db: Database.Database;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private db: any;
 
   constructor(dbPath: string) {
     const absPath = path.isAbsolute(dbPath) ? dbPath : path.join(process.cwd(), dbPath);
     const dir = path.dirname(absPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-    this.db = new Database(absPath);
+    // eval('require') completely hides the module from Turbopack/webpack static analysis
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, no-eval
+    const BetterSqlite3 = eval('require')('better-sqlite3');
+    this.db = new BetterSqlite3(absPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     logger.info(`[DB] SQLite connected: ${absPath}`);
