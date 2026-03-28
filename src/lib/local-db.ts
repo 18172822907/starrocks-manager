@@ -482,6 +482,20 @@ export interface AuditLogQuery {
   endDate?: string;
 }
 
+/**
+ * Convert an ISO 8601 date string (from frontend) to MySQL-compatible datetime.
+ * Handles: "2026-03-28T12:23:46.787Z" → "2026-03-28 12:23:46"
+ */
+function toMySQLDatetime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) {
+    // Fallback: strip ISO markers manually
+    return iso.replace('T', ' ').replace('Z', '').replace(/\.\d+$/, '');
+  }
+  // Format as YYYY-MM-DD HH:MM:SS in UTC
+  return d.toISOString().replace('T', ' ').slice(0, 19);
+}
+
 export async function queryAuditLogs(query: AuditLogQuery = {}): Promise<{ logs: AuditLogEntry[]; total: number }> {
   const db = await getLocalDb();
   const page = Math.max(1, query.page || 1);
@@ -495,12 +509,22 @@ export async function queryAuditLogs(query: AuditLogQuery = {}): Promise<{ logs:
   if (query.username) { conditions.push('username LIKE ?'); values.push(`%${query.username}%`); }
   if (query.action) { conditions.push('action LIKE ?'); values.push(`%${query.action}%`); }
   if (query.startDate) {
-    conditions.push('created_at >= ?');
-    values.push(query.startDate.replace('T', ' ').replace('Z', '').replace(/\.\d+$/, ''));
+    const dt = toMySQLDatetime(query.startDate);
+    if (db.isMysql) {
+      conditions.push('created_at >= CAST(? AS DATETIME)');
+    } else {
+      conditions.push('created_at >= ?');
+    }
+    values.push(dt);
   }
   if (query.endDate) {
-    conditions.push('created_at <= ?');
-    values.push(query.endDate.replace('T', ' ').replace('Z', '').replace(/\.\d+$/, ''));
+    const dt = toMySQLDatetime(query.endDate);
+    if (db.isMysql) {
+      conditions.push('created_at <= CAST(? AS DATETIME)');
+    } else {
+      conditions.push('created_at <= ?');
+    }
+    values.push(dt);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
