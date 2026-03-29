@@ -34,6 +34,7 @@ export const PERMISSIONS = {
   SYS_USERS: 'sys_users',
   AUDIT: 'audit',
   SYS_PERMISSIONS: 'sys_permissions',
+  SHOW_PROC: 'show_proc',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -78,6 +79,7 @@ export const PERMISSION_META: Record<string, PermissionMeta> = {
   sys_users:          { label: '系统用户',     group: 'system',     description: '管理系统登录账号', order: 1 },
   audit:              { label: '审计日志',     group: 'system',     description: '查看操作审计记录', order: 2 },
   sys_permissions:    { label: '权限配置',     group: 'system',     description: '配置角色功能权限', order: 3 },
+  show_proc:          { label: 'SHOW PROC',    group: 'ops',        description: '查看 SHOW PROC 高级诊断信息', order: 5 },
 };
 
 // ── Default permissions (matches current hardcoded behavior) ─────────
@@ -88,6 +90,7 @@ export const DEFAULT_PERMISSIONS: Record<string, Record<string, boolean>> = {
     query: true, routine_load: true, broker_load: true, pipes: true,
     task_manager: true, tasks: true, users: false, roles: false, privileges: false,
     nodes: false, resource_groups: true, functions: true, variables: true,
+    show_proc: true,
     cluster_manager: false, sys_users: false, audit: false, sys_permissions: false,
   },
   viewer: {
@@ -95,6 +98,7 @@ export const DEFAULT_PERMISSIONS: Record<string, Record<string, boolean>> = {
     query: false, routine_load: true, broker_load: true, pipes: true,
     task_manager: true, tasks: true, users: false, roles: false, privileges: false,
     nodes: false, resource_groups: false, functions: true, variables: true,
+    show_proc: true,
     cluster_manager: false, sys_users: false, audit: false, sys_permissions: false,
   },
 };

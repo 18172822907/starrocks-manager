@@ -106,6 +106,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ? (data.clusters || []).find((c: ClusterBrief) => c.id === data.activeClusterId) || null
           : null;
         setActiveCluster(active);
+
+        // Immediately check cluster health + create pool — prevents the
+        // "unknown → offline" flash that happens when pollHealth runs before
+        // the connection pool is established.
+        if (active) {
+          try {
+            const sid = `${active.host}:${active.port}`;
+            const hRes = await apiFetch(`/api/health?sessionId=${encodeURIComponent(sid)}`);
+            const hData = await hRes.json();
+            setClusterStatus(hData.ok ? 'online' : 'offline');
+          } catch {
+            setClusterStatus('offline');
+          }
+        }
+
         return { success: true };
       }
       return { success: false, error: data.error || '登录失败' };

@@ -13,6 +13,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/fetch-patch';
+import SearchableSelect from '@/components/SearchableSelect';
 
 const STATUS_STYLE: Record<string, { bg: string; border: string; color: string }> = {
   SUCCESS: { bg: 'rgba(22,163,74,0.08)', border: 'rgba(22,163,74,0.2)', color: 'var(--success-600)' },
@@ -149,11 +150,6 @@ export default function MaterializedViewsPage() {
 
   const pg = usePagination(filtered);
 
-  const selectStyle: React.CSSProperties = {
-    padding: '4px 10px', borderRadius: 'var(--radius-md)',
-    border: '1px solid var(--border-secondary)', background: 'var(--bg-primary)',
-    fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer',
-  };
 
   return (
     <>
@@ -190,10 +186,18 @@ export default function MaterializedViewsPage() {
             <input placeholder="搜索物化视图名称/数据库..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <select style={selectStyle} value={dbFilter} onChange={e => setDbFilter(e.target.value)}>
-              <option value="all">全部数据库 ({allDbs.length})</option>
-              {allDbs.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
+            <div style={{ width: '160px', flexShrink: 0 }}>
+              <SearchableSelect
+                value={dbFilter}
+                onChange={v => setDbFilter(v)}
+                options={[
+                  { label: `全部数据库 (${allDbs.length})`, value: 'all' },
+                  ...allDbs.map(d => ({ label: d, value: d })),
+                ]}
+                placeholder="全部数据库"
+                searchPlaceholder="搜索数据库..."
+              />
+            </div>
             <div style={{ display: 'flex', gap: '4px' }}>
               {([['all', '全部', views.length], ['true', '活跃', activeCount], ['false', '不活跃', inactiveCount]] as const).map(([val, label, cnt]) => (
                 <button
@@ -213,10 +217,17 @@ export default function MaterializedViewsPage() {
                 </button>
               ))}
             </div>
-            <select style={selectStyle} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="all">全部刷新状态</option>
-              {allStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <div style={{ width: '140px', flexShrink: 0 }}>
+              <SearchableSelect
+                value={statusFilter}
+                onChange={v => setStatusFilter(v)}
+                options={[
+                  { label: '全部刷新状态', value: 'all' },
+                  ...allStatuses.map(s => ({ label: s, value: s })),
+                ]}
+                placeholder="全部刷新状态"
+              />
+            </div>
           </div>
           <div className="toolbar-actions">
             <button className="btn btn-primary" onClick={() => { setCreateModal(true); setActionError(''); setCreateSql(''); }}>

@@ -140,12 +140,13 @@ async function recreatePool(sessionId: string): Promise<Pool | null> {
   // Try clusters table first (new auth model: sessionId = "host:port")
   try {
     const { getLocalDb } = require('./local-db');
-    const db = getLocalDb();
+    const db = await getLocalDb();
     const [host, portStr] = sessionId.split(':');
     if (host && portStr) {
-      const cluster = db.prepare(
-        'SELECT * FROM clusters WHERE host = ? AND port = ? AND is_active = 1'
-      ).get(host, parseInt(portStr, 10)) as { host: string; port: number; username: string; password: string; default_db: string } | undefined;
+      const cluster = await db.get(
+        'SELECT * FROM clusters WHERE host = ? AND port = ? AND is_active = 1',
+        [host, parseInt(portStr, 10)],
+      ) as { host: string; port: number; username: string; password: string; default_db: string } | undefined;
       if (cluster) {
         const pool = await createPool({
           host: cluster.host,

@@ -39,9 +39,10 @@ export async function GET(request: NextRequest) {
   try {
     const { getLocalDb } = require('@/lib/local-db');
     const db = await getLocalDb();
-    const cluster = db.prepare(
-      'SELECT username, password, default_db FROM clusters WHERE host = ? AND port = ? AND is_active = 1'
-    ).get(host, parseInt(portStr, 10)) as { username: string; password: string; default_db?: string } | undefined;
+    const cluster = await db.get(
+      'SELECT username, password, default_db FROM clusters WHERE host = ? AND port = ? AND is_active = 1',
+      [host, parseInt(portStr, 10)],
+    ) as { username: string; password: string; default_db?: string } | undefined;
     if (cluster) {
       username = cluster.username;
       password = cluster.password;

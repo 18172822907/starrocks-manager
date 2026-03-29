@@ -28,6 +28,8 @@ import {
   Network,
   ScrollText,
   KeyRound,
+  Microscope,
+  HardDriveDownload,
 } from 'lucide-react';
 
 interface NavItem {
@@ -62,6 +64,8 @@ const navItems: NavItem[] = [
   { href: '/resource-groups', icon: Layers, label: '资源组', permission: 'resource_groups' },
   { href: '/functions', icon: Code2, label: '函数管理', permission: 'functions' },
   { href: '/variables', icon: Settings, label: '变量管理', permission: 'variables' },
+  { href: '/show-proc', icon: Microscope, label: '高级诊断', permission: 'show_proc' },
+  { href: '/compaction-score', icon: HardDriveDownload, label: '合并诊断', permission: 'show_proc' },
   { label: '系统设置', section: true },
   { href: '/cluster-manager', icon: Network, label: '集群管理', permission: 'cluster_manager' },
   { href: '/sys-users', icon: UserCog, label: '系统用户', permission: 'sys_users' },

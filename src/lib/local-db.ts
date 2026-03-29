@@ -60,6 +60,7 @@ async function initSchema(db: DbAdapter): Promise<void> {
       CREATE TABLE IF NOT EXISTS task_runs_cache (connection_id VARCHAR(255) PRIMARY KEY, data LONGTEXT NOT NULL, cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       CREATE TABLE IF NOT EXISTS task_runs_all_cache (connection_id VARCHAR(255) PRIMARY KEY, data LONGTEXT NOT NULL, cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       CREATE TABLE IF NOT EXISTS nodes_cache (connection_id VARCHAR(255) PRIMARY KEY, data LONGTEXT NOT NULL, cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      CREATE TABLE IF NOT EXISTS show_proc_cache (connection_id VARCHAR(255) PRIMARY KEY, data LONGTEXT NOT NULL, cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
       CREATE TABLE IF NOT EXISTS command_log (
         id INTEGER PRIMARY KEY AUTO_INCREMENT, session_id VARCHAR(255) NOT NULL,
@@ -151,6 +152,7 @@ async function initSchema(db: DbAdapter): Promise<void> {
       CREATE TABLE IF NOT EXISTS task_runs_cache (connection_id TEXT PRIMARY KEY, data TEXT NOT NULL, cached_at DATETIME DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS task_runs_all_cache (connection_id TEXT PRIMARY KEY, data TEXT NOT NULL, cached_at DATETIME DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS nodes_cache (connection_id TEXT PRIMARY KEY, data TEXT NOT NULL, cached_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE IF NOT EXISTS show_proc_cache (connection_id TEXT PRIMARY KEY, data TEXT NOT NULL, cached_at DATETIME DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS command_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
         source TEXT NOT NULL DEFAULT 'unknown', sql_text TEXT NOT NULL,
@@ -320,7 +322,7 @@ interface BlobCacheRow {
   cached_at: string;
 }
 
-export type CacheTable = 'users_cache' | 'roles_cache' | 'resource_groups_cache' | 'catalogs_cache' | 'functions_cache' | 'variables_cache' | 'materialized_views_cache' | 'broker_load_cache' | 'routine_load_cache' | 'pipes_cache' | 'tasks_cache' | 'task_runs_cache' | 'task_runs_all_cache' | 'nodes_cache';
+export type CacheTable = 'users_cache' | 'roles_cache' | 'resource_groups_cache' | 'catalogs_cache' | 'functions_cache' | 'variables_cache' | 'materialized_views_cache' | 'broker_load_cache' | 'routine_load_cache' | 'pipes_cache' | 'tasks_cache' | 'task_runs_cache' | 'task_runs_all_cache' | 'nodes_cache' | 'show_proc_cache';
 
 export async function getBlobCache(table: CacheTable, connectionId: string, maxAgeMs: number = DEFAULT_CACHE_MAX_AGE_MS): Promise<{ data: unknown; cachedAt: string } | null> {
   const db = await getLocalDb();

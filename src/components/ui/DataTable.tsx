@@ -1,7 +1,8 @@
 'use client';
 
-import React, { ReactNode } from 'react';
-import { Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import React, { ReactNode, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check } from 'lucide-react';
 
 interface DataTableProps {
   loading: boolean;
@@ -42,6 +43,106 @@ export function DataTable({ loading, empty, emptyIcon, emptyText, footerLeft, fo
         {pagination && <Pagination {...pagination} />}
       </div>
     </div>
+  );
+}
+
+/* ─── Mini Select (non-native dropdown for small option sets) ─── */
+
+function MiniSelect({ value, options, onChange }: {
+  value: number;
+  options: { label: string; value: number }[];
+  onChange: (v: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    // Open upward since pagination is at the bottom
+    const menuH = options.length * 30 + 8;
+    setPos({ top: rect.top - menuH - 4, left: rect.left, width: Math.max(rect.width, 72) });
+  }, [open, options.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      const t = e.target as Node;
+      if (triggerRef.current && !triggerRef.current.contains(t) && menuRef.current && !menuRef.current.contains(t)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const selectedLabel = options.find(o => o.value === value)?.label || '';
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen(!open)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: '4px',
+          padding: '3px 8px', height: '28px',
+          fontSize: '0.76rem', color: 'var(--text-secondary)',
+          backgroundColor: 'var(--bg-primary)',
+          border: '1px solid var(--border-primary)',
+          borderRadius: 'var(--radius-sm)',
+          cursor: 'pointer', transition: 'all 0.15s',
+          outline: open ? '2px solid var(--primary-400)' : 'none',
+          outlineOffset: '-1px',
+        }}
+      >
+        {selectedLabel}
+        <ChevronDown size={12} style={{
+          transition: 'transform 0.2s',
+          transform: open ? 'rotate(180deg)' : 'none',
+          color: 'var(--text-tertiary)',
+        }} />
+      </button>
+      {open && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed', top: pos.top, left: pos.left, width: pos.width,
+            zIndex: 10000,
+            backgroundColor: 'var(--bg-elevated)',
+            border: '1px solid var(--border-primary)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-lg)',
+            padding: '4px',
+            animation: 'fadeIn 0.12s ease',
+          }}
+        >
+          {options.map(opt => (
+            <div
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+                fontSize: '0.76rem', cursor: 'pointer',
+                color: opt.value === value ? 'var(--primary-600)' : 'var(--text-secondary)',
+                backgroundColor: opt.value === value ? 'var(--primary-50)' : 'transparent',
+                fontWeight: opt.value === value ? 600 : 400,
+                transition: 'background-color 0.1s',
+              }}
+              onMouseEnter={e => { if (opt.value !== value) (e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'); }}
+              onMouseLeave={e => { if (opt.value !== value) (e.currentTarget.style.backgroundColor = 'transparent'); }}
+            >
+              {opt.label}
+              {opt.value === value && <Check size={13} style={{ color: 'var(--primary-500)' }} />}
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -86,12 +187,11 @@ export function Pagination({ page, pageSize, totalPages, totalItems, onPageChang
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
       {/* Page size selector */}
       <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>每页</span>
-      <select
-        value={pageSize} onChange={e => onPageSizeChange(Number(e.target.value))}
-        style={{ padding: '3px 6px', fontSize: '0.76rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-primary)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}
-      >
-        {PAGE_SIZE_OPTIONS.map(s => <option key={s} value={s}>{s} 条</option>)}
-      </select>
+      <MiniSelect
+        value={pageSize}
+        options={PAGE_SIZE_OPTIONS.map(s => ({ label: `${s} 条`, value: s }))}
+        onChange={onPageSizeChange}
+      />
 
       <span style={{ margin: '0 4px', color: 'var(--border-secondary)' }}>|</span>
 
